@@ -40,9 +40,9 @@ class MySQLClient:
                 echo=False
             )
             self.Session = sessionmaker(bind=self.engine)
-            logger.info(f"✅ MySQL connection initialized: {self.host}:{self.port}")
+            logger.info(f"MySQL connection initialized: {self.host}:{self.port}")
         except Exception as e:
-            logger.error(f"❌ Failed to initialize MySQL connection: {str(e)}")
+            logger.error(f"Failed to initialize MySQL connection: {str(e)}")
             raise
     
     def test_connection(self) -> bool:

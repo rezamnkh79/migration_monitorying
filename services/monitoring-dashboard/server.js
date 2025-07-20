@@ -67,19 +67,19 @@ async function initializeConnections() {
     });
     
     await redisClient.connect();
-    console.log('✅ Connected to Redis');
+    console.log('Connected to Redis');
 
     // MySQL connection
     mysqlConnection = await mysql.createConnection(config.mysql);
-    console.log('✅ Connected to MySQL');
+    console.log('Connected to MySQL');
 
     // PostgreSQL connection
     postgresClient = new Client(config.postgres);
     await postgresClient.connect();
-    console.log('✅ Connected to PostgreSQL');
+    console.log('Connected to PostgreSQL');
 
   } catch (error) {
-    console.error('❌ Failed to initialize connections:', error);
+    console.error('Failed to initialize connections:', error);
   }
 }
 
@@ -387,14 +387,14 @@ async function startServer() {
   await initializeConnections();
   
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Monitoring Dashboard running on port ${PORT}`);
-    console.log(`📊 Dashboard URL: http://localhost:${PORT}`);
+    console.log(`Monitoring Dashboard running on port ${PORT}`);
+    console.log(`Dashboard URL: http://localhost:${PORT}`);
   });
 }
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('🛑 Shutting down gracefully...');
+  console.log('Shutting down gracefully...');
   
   if (redisClient) {
     await redisClient.quit();
@@ -407,7 +407,7 @@ process.on('SIGINT', async () => {
   }
   
   server.close(() => {
-    console.log('✅ Server closed');
+    console.log('Server closed');
     process.exit(0);
   });
 });

@@ -32,7 +32,7 @@ class MonitoringService:
     
     def collect_metrics(self):
         """Collect current metrics from all data sources"""
-        logger.info("📊 Collecting metrics...")
+        logger.info("Collecting metrics...")
         
         try:
             metrics = {
@@ -49,10 +49,10 @@ class MonitoringService:
             hour_key = f"metrics:hourly:{datetime.now().strftime('%Y%m%d%H')}"
             self.redis.setex(hour_key, 86400, json.dumps(metrics))
             
-            logger.info("✅ Metrics collected successfully")
+            logger.info("Metrics collected successfully")
             
         except Exception as e:
-            logger.error(f"❌ Failed to collect metrics: {str(e)}")
+            logger.error(f"Failed to collect metrics: {str(e)}")
     
     def _collect_database_stats(self) -> Dict[str, Any]:
         """Collect database statistics"""

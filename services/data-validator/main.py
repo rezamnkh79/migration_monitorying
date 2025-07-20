@@ -73,31 +73,31 @@ async def startup_event():
     """Initialize all services with Debezium CDC support"""
     global mysql_client, postgres_client, redis_client, data_validator, cdc_manager, monitoring_service
     
-    logger.info("🚀 Starting MySQL to PostgreSQL Migration System with Dynamic CDC")
+    logger.info("Starting MySQL to PostgreSQL Migration System with Dynamic CDC")
     
     try:
         # Initialize database clients
-        logger.info("📡 Connecting to databases...")
+        logger.info("Connecting to databases...")
         mysql_client = MySQLClient()
         postgres_client = PostgreSQLClient()
         
         # Initialize Redis client
-        logger.info("🔴 Connecting to Redis...")
+        logger.info("Connecting to Redis...")
         redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
         
         # Test connections
         mysql_status = mysql_client.test_connection()
         postgres_status = postgres_client.test_connection()
         
-        logger.info(f"MySQL Connection: {'✅' if mysql_status else '❌'}")
-        logger.info(f"PostgreSQL Connection: {'✅' if postgres_status else '❌'}")
+        logger.info(f"MySQL Connection: {'Connected' if mysql_status else 'Failed'}")
+        logger.info(f"PostgreSQL Connection: {'Connected' if postgres_status else 'Failed'}")
         
         # Initialize services
         data_validator = DataValidator(mysql_client, postgres_client, redis_client)
         monitoring_service = MonitoringService(redis_client, mysql_client, postgres_client)
         
         # Initialize CDC Manager
-        logger.info("🔄 Setting up Dynamic CDC Manager...")
+        logger.info("Setting up Dynamic CDC Manager...")
         cdc_manager = DynamicTableMonitor(
             mysql_client=mysql_client,
             postgres_client=postgres_client,
@@ -116,13 +116,13 @@ async def startup_event():
         # Initialize table sync status
         await initialize_table_sync_status()
         
-        logger.info("✅ All services initialized successfully!")
-        logger.info("🎯 Dynamic CDC Migration System is ready!")
+        logger.info("All services initialized successfully!")
+        logger.info("Dynamic CDC Migration System is ready!")
         
     except Exception as e:
-        logger.error(f"❌ Failed to initialize services: {str(e)}")
+        logger.error(f"Failed to initialize services: {str(e)}")
         # Don't raise - allow partial functionality
-        logger.warning("⚠️ Running in limited mode due to initialization errors")
+        logger.warning("Running in limited mode due to initialization errors")
 
 async def initialize_table_sync_status():
     """Initialize table sync status tracking with dynamic tables"""
@@ -157,7 +157,7 @@ async def initialize_table_sync_status():
                 "sync_percentage": (postgres_count / mysql_count * 100) if mysql_count > 0 else 0
             }
         
-        logger.info(f"📊 Initialized dynamic sync status for {len(global_stats['table_sync_status'])} tables: {monitored_tables}")
+        logger.info(f"Initialized dynamic sync status for {len(global_stats['table_sync_status'])} tables: {monitored_tables}")
         
     except Exception as e:
         logger.error(f"Failed to initialize table sync status: {str(e)}")
@@ -181,19 +181,19 @@ def start_background_tasks():
     def run_cdc_manager():
         """Run Dynamic Table Monitor in background thread"""
         try:
-            logger.info("🔄 Starting Dynamic Table Monitor thread...")
+            logger.info("Starting Dynamic Table Monitor thread...")
             if cdc_manager is None:
-                logger.error("❌ cdc_manager is None!")
+                logger.error("cdc_manager is None!")
                 return
             
             # Start comprehensive monitoring (this handles everything)
-            logger.info("🚀 Starting comprehensive table monitoring...")
+            logger.info("Starting comprehensive table monitoring...")
             cdc_manager.start_monitoring()
                 
         except Exception as e:
-            logger.error(f"💥 Dynamic Table Monitor thread error: {str(e)}")
+            logger.error(f"Dynamic Table Monitor thread error: {str(e)}")
             import traceback
-            logger.error(f"📜 Full traceback: {traceback.format_exc()}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
     
     def run_periodic_validation():
         """Run periodic validation checks"""
@@ -235,7 +235,7 @@ def start_background_tasks():
     threading.Thread(target=run_monitoring, daemon=True).start()
     threading.Thread(target=update_table_sync_status, daemon=True).start()
     
-    logger.info("🚀 Background tasks started successfully")
+    logger.info("Background tasks started successfully")
 
 def update_connector_status():
     """Check and update Dynamic Table Monitor connector status"""
@@ -257,7 +257,7 @@ def update_connector_status():
                     if task_state == "FAILED":
                         global_stats["connector_status"]["mysql"] = "failed"
                 
-                logger.debug(f"🔧 MySQL Connector Status: {connector_state}")
+                logger.debug(f"MySQL Connector Status: {connector_state}")
             else:
                 global_stats["connector_status"]["mysql"] = "disconnected"
         except Exception as e:
@@ -404,7 +404,7 @@ async def get_cdc_status():
 async def get_latest_records(table_name: str, limit: int = 5):
     """Get latest records from both MySQL and PostgreSQL for comparison"""
     try:
-        logger.info(f"🔍 Getting latest {limit} records from table: {table_name}")
+        logger.info(f"Getting latest {limit} records from table: {table_name}")
         
         result = {
             "timestamp": datetime.now().isoformat(),
@@ -430,7 +430,7 @@ async def get_latest_records(table_name: str, limit: int = 5):
                 result["comparison"]["mysql_total"] = mysql_total
                 
             except Exception as e:
-                logger.warning(f"⚠️ Error getting MySQL latest records for {table_name}: {str(e)}")
+                logger.warning(f"Error getting MySQL latest records for {table_name}: {str(e)}")
                 result["mysql_latest"] = []
                 result["comparison"]["mysql_count"] = 0
         
@@ -446,7 +446,7 @@ async def get_latest_records(table_name: str, limit: int = 5):
                 result["comparison"]["postgres_total"] = postgres_total
                 
             except Exception as e:
-                logger.warning(f"⚠️ Error getting PostgreSQL latest records for {table_name}: {str(e)}")
+                logger.warning(f"Error getting PostgreSQL latest records for {table_name}: {str(e)}")
                 result["postgres_latest"] = []
                 result["comparison"]["postgres_count"] = 0
         
@@ -469,11 +469,11 @@ async def get_latest_records(table_name: str, limit: int = 5):
             "table_sync_status": global_stats["table_sync_status"].get(table_name, {})
         }
         
-        logger.info(f"✅ Latest records comparison for {table_name}: MySQL={mysql_total}, PostgreSQL={postgres_total}")
+        logger.info(f"Latest records comparison for {table_name}: MySQL={mysql_total}, PostgreSQL={postgres_total}")
         return result
         
     except Exception as e:
-        logger.error(f"❌ Failed to get latest records for {table_name}: {str(e)}")
+        logger.error(f"Failed to get latest records for {table_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/metrics")
@@ -567,14 +567,14 @@ async def get_metrics():
         return metrics
         
     except Exception as e:
-        logger.error(f"❌ Failed to get metrics: {str(e)}")
+        logger.error(f"Failed to get metrics: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/sync-check")
 async def manual_sync_check():
     """Manual sync check with CDC status"""
     try:
-        logger.info("🔍 Manual sync check requested with CDC status")
+        logger.info("Manual sync check requested with CDC status")
         
         result = {
             "timestamp": datetime.now().isoformat(),
@@ -610,7 +610,7 @@ async def manual_sync_check():
                     result["mysql_counts"][table_name] = count
                     
                 except Exception as table_error:
-                    logger.warning(f"⚠️ Error checking MySQL table {table_name}: {str(table_error)}")
+                    logger.warning(f"Error checking MySQL table {table_name}: {str(table_error)}")
                     result["mysql_counts"][table_name] = "ERROR"
         
         # Get PostgreSQL data
@@ -629,7 +629,7 @@ async def manual_sync_check():
                     result["postgres_counts"][table_name] = count
                     
                 except Exception as table_error:
-                    logger.warning(f"⚠️ Error checking PostgreSQL table {table_name}: {str(table_error)}")
+                    logger.warning(f"Error checking PostgreSQL table {table_name}: {str(table_error)}")
                     result["postgres_counts"][table_name] = "ERROR"
         
         # Calculate sync summary
@@ -655,11 +655,11 @@ async def manual_sync_check():
             "missing": len(mysql_table_names.symmetric_difference(postgres_table_names))
         }
         
-        logger.info(f"✅ Sync check completed: {synced_count} synced, {different_count} different, CDC events: {global_stats['cdc_events_processed']}")
+        logger.info(f"Sync check completed: {synced_count} synced, {different_count} different, CDC events: {global_stats['cdc_events_processed']}")
         return result
         
     except Exception as e:
-        logger.error(f"❌ Sync check failed: {str(e)}")
+        logger.error(f"Sync check failed: {str(e)}")
         return {
             "error": str(e),
             "timestamp": datetime.now().isoformat(),
@@ -711,7 +711,7 @@ async def get_cdc_events(limit: int = 100):
 async def trigger_validation(request: ValidationRequest):
     """Trigger validation for specified tables"""
     try:
-        logger.info(f"🔍 Validation requested for tables: {request.tables}, full_validation: {request.full_validation}")
+        logger.info(f"Validation requested for tables: {request.tables}, full_validation: {request.full_validation}")
         
         if not data_validator:
             raise HTTPException(status_code=503, detail="Data validator not initialized")
@@ -748,11 +748,11 @@ async def trigger_validation(request: ValidationRequest):
             "results": validation_results
         }
         
-        logger.info(f"✅ Validation completed: {response['consistent_tables']}/{response['tables_validated']} tables consistent")
+        logger.info(f"Validation completed: {response['consistent_tables']}/{response['tables_validated']} tables consistent")
         return response
         
     except Exception as e:
-        logger.error(f"❌ Validation failed: {str(e)}")
+        logger.error(f"Validation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/stats")
@@ -852,7 +852,7 @@ async def test_cdc_simulation():
             "simulated": True
         }
         
-        logger.info(f"📝 SIMULATED CDC Event: insert on users (Total: {global_stats['cdc_events_processed']})")
+        logger.info(f"SIMULATED CDC Event: insert on users (Total: {global_stats['cdc_events_processed']})")
         
         return {
             "message": "CDC event simulated successfully",
@@ -872,7 +872,7 @@ async def setup_dynamic_table_monitor():
         if not cdc_manager:
             raise HTTPException(status_code=503, detail="Table Monitor not initialized")
         
-        logger.info("🔧 Setting up Dynamic Table Monitor via API request...")
+        logger.info("Setting up Dynamic Table Monitor via API request...")
         
         # Start monitoring (this will discover tables and setup connectors automatically)
         cdc_manager.start_monitoring()

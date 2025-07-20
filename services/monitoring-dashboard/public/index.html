@@ -464,11 +464,11 @@
             if (mysqlTableList && Array.isArray(mysqlTableList) && mysqlTableList.length > 0) {
                 // Show first 10 tables for performance (reduced from 20)
                 tables = mysqlTableList.slice(0, 10);
-                console.log('✅ USING DYNAMIC TABLES:', tables.length, 'tables');
+                console.log('USING DYNAMIC TABLES:', tables.length, 'tables');
                 console.log('First 5 dynamic tables:', tables.slice(0, 5));
             } else {
                 tables = ['users', 'products', 'orders', 'order_items'];
-                console.log('❌ USING FALLBACK TABLES');
+                console.log('USING FALLBACK TABLES');
             }
 
             let html = '';
@@ -1125,7 +1125,7 @@
             updateProgressCircle(progress);
             progressDetails.textContent = `${syncedTables} of ${totalTablesWithData} tables synced`;
             
-            console.log(`✅ Main table updated: ${syncedTables}/${totalTablesWithData} synced (${progress.toFixed(1)}%)`);
+            console.log(`Main table updated: ${syncedTables}/${totalTablesWithData} synced (${progress.toFixed(1)}%)`);
         }
 
         function addTestUser() {

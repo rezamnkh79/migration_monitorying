@@ -1,320 +1,288 @@
-# مهاجرت MySQL به PostgreSQL با Debezium CDC
+# MySQL to PostgreSQL Migration System with Dynamic CDC
 
-## 📋 فهرست مطالب
-- [ساختار پروژه](#ساختار-پروژه)
-- [چگونگی کارکرد Debezium](#چگونگی-کارکرد-debezium)
-- [نحوه استفاده](#نحوه-استفاده)
-- [مشاهده آخرین رکوردها](#مشاهده-آخرین-رکوردها)
+## Overview
 
-## 🏗️ ساختار پروژه
+This project implements a comprehensive real-time migration monitoring system from MySQL to PostgreSQL using Change Data Capture (CDC) technology. The system automatically discovers database tables, monitors changes in real-time, and provides detailed migration statistics through a web dashboard.
+
+## System Architecture
+
+### Core Components
+
+The system consists of several interconnected services that work together to provide real-time data migration monitoring:
+
+**Database Services:**
+- MySQL: Source database containing original data
+- PostgreSQL: Target database for migration
+- Redis: Cache and statistics storage
+
+**Message Processing:**
+- Apache Kafka: Event streaming platform for CDC events
+- Zookeeper: Kafka coordination service
+- Kafka Connect: Debezium connector runtime environment
+
+**Application Services:**
+- Data Validator: Python FastAPI service for CDC processing and validation
+- Monitoring Dashboard: Node.js web interface for real-time monitoring
+- Kafka UI: Web interface for Kafka topic management
+
+## How Change Data Capture Works
+
+### The CDC Flow Process
+
+Change Data Capture is the core technology that enables real-time detection of database changes. Here is how it works step by step:
+
+### Visual Flow Diagram
 
 ```
-migration_to_postgress/
-├── services/                          # سرویس‌های اصلی
-│   ├── monitoring-dashboard/           # داشبورد مانیتورینگ (Node.js)
-│   │   ├── server.js                  # سرور اصلی داشبورد
-│   │   ├── public/index.html          # رابط کاربری وب
-│   │   └── package.json               # وابستگی‌های Node.js
-│   └── data-validator/                # سرویس اعتبارسنجی داده (Python)
-│       ├── main.py                    # سرور اصلی FastAPI
-│       ├── services/                  # سرویس‌های مختلف
-│       │   ├── kafka_consumer.py      # مصرف کننده Kafka برای CDC
-│       │   ├── data_validator.py      # اعتبارسنجی داده‌ها
-│       │   └── monitoring.py          # سرویس مانیتورینگ
-│       ├── database/                  # کلاینت‌های پایگاه داده
-│       │   ├── mysql_client.py        # اتصال به MySQL
-│       │   └── postgres_client.py     # اتصال به PostgreSQL
-│       └── models/                    # مدل‌های داده
-├── debezium/                          # پیکربندی Debezium
-│   ├── mysql-source-connector.json    # کانکتور منبع MySQL
-│   └── postgres-sink-connector.json   # کانکتور مقصد PostgreSQL
-├── scripts/                           # اسکریپت‌های کمکی
-│   ├── setup-debezium.sh             # راه‌اندازی Debezium
-│   └── test-migration.sh             # تست مهاجرت
-└── docker-compose.yml                # تنظیمات Docker
+┌────────────────────────────┐
+│        You issue a         │ ← INSERT / UPDATE / DELETE
+│        SQL command         │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│        MySQL Engine        │ ← Executes the command
+│                            │ ← Modifies data in the table
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│     mysql-bin.000011       │ ← MySQL writes to binlog automatically
+│     Position: 803          │ ← This is done by MySQL internally
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│        Debezium            │ ← Reads binlog entries
+│        Connector           │ ← Converts to JSON message
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│        Kafka Topic         │ ← Publishes the JSON message
+│         "users"            │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│        Our Code            │ ← Consumes the Kafka message
+│        _process_cdc        │ ← Increments the counter, etc.
+└────────────────────────────┘
 ```
 
-## 🔄 چگونگی کارکرد Debezium
+### Detailed Step-by-Step Process
 
-### مفهوم Change Data Capture (CDC)
-Debezium یک پلتفرم open-source برای Change Data Capture (CDC) است که تغییرات داده‌ها را در real-time دنبال می‌کند.
+**Step 1: MySQL Binary Log Recording**
+When you execute any SQL operation (INSERT, UPDATE, DELETE) on MySQL, the database engine automatically writes these changes to binary log files called binlog. These files contain a complete record of all data modifications with precise timestamps and positions.
 
-### مراحل کارکرد:
+**Step 2: Debezium Connector Reading**
+Debezium connector acts as a specialized binary log reader. It continuously monitors the MySQL binlog files and reads new entries as they are written. The connector maintains its current position in the binlog to ensure no events are missed.
 
-#### 1️⃣ **خواندن Binary Log MySQL**
+**Step 3: Event Transformation and Publishing**
+When Debezium detects a change in the binlog, it converts the raw binary data into structured JSON messages. These messages contain information about what operation occurred (insert/update/delete), which table was affected, the data before and after the change, and metadata about the source.
+
+**Step 4: Kafka Topic Distribution**
+The JSON messages are published to specific Kafka topics. Each database table gets its own topic, allowing for organized and scalable event processing. Kafka ensures reliable delivery and ordering of these events.
+
+**Step 5: Consumer Processing**
+Our application consumes these messages from Kafka topics and processes them to update statistics, validate data consistency, and maintain real-time sync status information.
+
+## Dynamic Table Discovery System
+
+### Traditional vs Dynamic Approach
+
+Traditional CDC systems require manual configuration of which tables to monitor through static configuration files. This project implements a dynamic discovery system that automatically detects and monitors all database tables without hardcoded configurations.
+
+### Discovery Process
+
+**Initial Discovery:**
+The system connects to MySQL and queries the information schema to get a complete list of all tables in the target database. System tables and temporary tables are automatically filtered out.
+
+**Continuous Monitoring:**
+Every 30 seconds, the system re-scans the database for new tables or removed tables. When changes are detected, the CDC connectors are automatically updated to include or exclude tables as needed.
+
+**Schema Awareness:**
+The system also tracks column information for each table, allowing it to detect schema changes and adapt accordingly.
+
+### Connector Management
+
+**Dynamic Connector Creation:**
+Instead of using static JSON configuration files, the system programmatically creates Debezium connectors through the Kafka Connect REST API. The table include list is built dynamically based on discovered tables.
+
+**Automatic Updates:**
+When new tables are detected, the system recreates the connector with an updated configuration that includes the new tables. This ensures all database changes are captured without manual intervention.
+
+## Services Detailed Architecture
+
+### Data Validator Service (Python FastAPI)
+
+This is the core service that handles CDC processing and data validation.
+
+**Key Components:**
+
+`services/data-validator/main.py`: Main application entry point that initializes all services and provides REST API endpoints.
+
+`services/data-validator/services/dynamic_table_monitor.py`: Core CDC management system that handles table discovery, connector management, and event processing.
+
+`services/data-validator/database/mysql_client.py`: MySQL database connection and query utilities.
+
+`services/data-validator/database/postgres_client.py`: PostgreSQL database connection and query utilities.
+
+`services/data-validator/services/data_validator.py`: Data consistency validation logic.
+
+`services/data-validator/services/monitoring.py`: System monitoring and metrics collection.
+
+**Key Functions:**
+
+Table Discovery: Automatically scans MySQL to find all monitorable tables.
+
+Connector Management: Creates and updates Debezium connectors dynamically.
+
+Event Processing: Consumes CDC events from Kafka and updates statistics.
+
+Data Validation: Compares data between MySQL and PostgreSQL to detect inconsistencies.
+
+API Endpoints: Provides REST APIs for status checking and system control.
+
+### Monitoring Dashboard Service (Node.js)
+
+Web-based interface for real-time monitoring of the migration process.
+
+**Key Files:**
+
+`services/monitoring-dashboard/server.js`: Express.js server that provides the web interface and WebSocket connections for real-time updates.
+
+`services/monitoring-dashboard/public/index.html`: Single-page application that displays migration statistics, table sync status, and CDC event counters.
+
+**Features:**
+
+Real-time table sync percentages showing how much data has been migrated for each table.
+
+CDC events counter that increments with each database change detected.
+
+Connector status indicators showing the health of MySQL and PostgreSQL connections.
+
+Latest records viewer for examining recent data in both databases.
+
+### Database Clients
+
+**MySQL Client:**
+Handles connections to the source MySQL database. Provides methods for querying table lists, counting records, retrieving data, and accessing table schemas.
+
+**PostgreSQL Client:**
+Manages connections to the target PostgreSQL database. Includes functionality for data insertion, updates, deletions, and migration logging.
+
+## Understanding CDC Events Counter
+
+### What the Counter Represents
+
+The CDC Events Processed counter displayed in the dashboard represents the total number of change events that have been detected and processed since the system started.
+
+### When the Counter Increases
+
+The counter increments by one for each of these operations:
+
+**INSERT Operations:** When new records are added to any monitored table.
+**UPDATE Operations:** When existing records are modified in any monitored table.  
+**DELETE Operations:** When records are removed from any monitored table.
+
+### Counter Reset Behavior
+
+The counter resets to zero when Docker containers are restarted because it is stored in application memory (RAM) rather than persistent storage. However, the actual CDC events are stored in Redis for historical tracking, so the event history is preserved even after restarts.
+
+### Event Processing Flow
+
+When a database change occurs:
+1. MySQL writes the change to its binary log
+2. Debezium reads the binary log and creates a JSON event
+3. The event is published to the appropriate Kafka topic
+4. Our consumer reads the event from Kafka
+5. The counter is incremented and sync statistics are updated
+
+## Sync Status Determination
+
+### Real-time Sync Calculation
+
+The system uses CDC events to trigger sync status updates. When an event is received:
+
+1. The system queries both MySQL and PostgreSQL to get current record counts
+2. Sync percentage is calculated as (PostgreSQL count / MySQL count) * 100
+3. The table status is updated with the new percentages and last operation type
+
+### Kafka Role in Sync Detection
+
+Kafka serves multiple critical functions beyond just event counting:
+
+**Event Streaming:** Delivers change events from Debezium to our processing system.
+**Real-time Triggers:** Each Kafka message triggers a sync status recalculation.
+**Operation Tracking:** Kafka messages contain operation types (insert/update/delete) for detailed statistics.
+**Historical Data:** Events are stored for audit trails and debugging.
+
+## API Endpoints
+
+### Core Endpoints
+
+`GET /health`: System health check with database connection status.
+`GET /metrics`: Detailed migration statistics and table sync percentages.
+`GET /table-monitor/status`: Comprehensive CDC system status.
+`GET /discover-tables`: Manual table discovery trigger.
+
+### Control Endpoints
+
+`POST /table-monitor/setup`: Initialize dynamic table monitoring.
+`POST /table-monitor/add-table/{table_name}`: Manually add a table to monitoring.
+
+### Legacy Endpoints
+
+`GET /cdc/status`: Legacy CDC status (redirects to table-monitor).
+`POST /cdc/setup-dynamic`: Legacy setup (redirects to table-monitor).
+
+## Configuration
+
+### Environment Variables
+
+The system uses environment variables for database connections:
+
 ```
-MySQL Database
-    ↓ (Binary Log/Binlog)
-MySQL Source Connector
-    ↓ (Kafka Messages)
-Kafka Topics
+MYSQL_HOST=mysql
+MYSQL_USER=debezium
+MYSQL_PASSWORD=dbz
+MYSQL_DATABASE=inventory
+POSTGRES_HOST=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DATABASE=inventory
+REDIS_HOST=redis
 ```
 
-- Debezium به Binary Log (binlog) MySQL متصل می‌شود
-- هر تغییر در داده‌ها (INSERT, UPDATE, DELETE) در binlog ثبت می‌شود
-- Connector این تغییرات را می‌خواند و به پیام‌های Kafka تبدیل می‌کند
+### Discovery Settings
 
-#### 2️⃣ **پردازش پیام‌ها در Kafka**
-```
-Kafka Topic: adtrace_block_list
-├── INSERT Event: {"op": "c", "after": {...}}
-├── UPDATE Event: {"op": "u", "before": {...}, "after": {...}}
-└── DELETE Event: {"op": "d", "before": {...}}
-```
+Table discovery runs every 30 seconds by default. System tables, temporary tables, and backup tables are automatically excluded from monitoring.
 
-- هر جدول یک Topic مجزا در Kafka دارد
-- پیام‌ها شامل نوع عملیات (op) و داده‌ها (before/after) هستند
+## Deployment
 
-#### 3️⃣ **ارسال به PostgreSQL**
-```
-Kafka Consumer (Python)
-    ↓ (Process & Transform)
-PostgreSQL Database
-```
+The entire system runs in Docker containers orchestrated by Docker Compose. The main docker-compose.yml file defines all services and their interconnections.
 
-### نمونه فلوی کامل:
-```
-1. کاربر یک رکورد جدید در MySQL اضافه می‌کند
-   INSERT INTO users (name, email) VALUES ('احمد', 'ahmad@test.com')
+### Starting the System
 
-2. MySQL این تغییر را در binlog ثبت می‌کند
-
-3. Debezium MySQL Connector این تغییر را می‌خواند:
-   {
-     "op": "c",  // create
-     "after": {
-       "id": 123,
-       "name": "احمد", 
-       "email": "ahmad@test.com"
-     }
-   }
-
-4. پیام به Kafka Topic ارسال می‌شود
-
-5. Consumer Python پیام را دریافت و پردازش می‌کند
-
-6. داده در PostgreSQL اضافه می‌شود
-
-7. آمار در Redis و Dashboard آپدیت می‌شود
-```
-
-## 🚀 نحوه استفاده
-
-### راه‌اندازی سیستم:
 ```bash
-# شروع سرویس‌ها
-docker-compose up -d
-
-# راه‌اندازی Debezium
-./scripts/setup-debezium.sh
-
-# مشاهده داشبورد
-http://localhost:3000
+  docker-compose up --build -d
 ```
 
-### مشاهده آمار:
-- **تعداد کل رکوردها**: مقایسه تعداد رکوردها در MySQL و PostgreSQL
-- **تعداد INSERT ها**: تعداد رکوردهای جدید اضافه شده
-- **تعداد UPDATE ها**: تعداد رکوردهای آپدیت شده  
-- **تعداد DELETE ها**: تعداد رکوردهای حذف شده
+### Accessing Services
 
-## 👁️ مشاهده آخرین رکوردها
+- Web Dashboard: http://localhost:3000
+- API Documentation: http://localhost:8000
+- Kafka UI: http://localhost:8080
 
-### از طریق Dashboard:
-1. در جدول اصلی، روی دکمه **"Latest"** کلیک کنید
-2. پنجره‌ای باز می‌شود که نشان می‌دهد:
-   - 5 رکورد آخر از MySQL
-   - 5 رکورد آخر از PostgreSQL
-   - وضعیت Sync
-   - آمار CDC
+## Data Flow Summary
 
-### از طریق API:
-```bash
-# مشاهده 5 رکورد آخر از جدول users
-curl http://localhost:8000/latest-records/users?limit=5
+1. User modifies data in MySQL database
+2. MySQL writes change to binary log
+3. Debezium connector reads binary log
+4. Change event is published to Kafka topic
+5. Python consumer processes the event
+6. Sync statistics are updated in real-time
+7. Dashboard displays current status
 
-# نمونه پاسخ:
-{
-  "table_name": "users",
-  "mysql_latest": [
-    {"id": 100, "name": "علی", "created_at": "2024-01-15"},
-    {"id": 99, "name": "مریم", "created_at": "2024-01-14"}
-  ],
-  "postgres_latest": [
-    {"id": 100, "name": "علی", "created_at": "2024-01-15"},
-    {"id": 99, "name": "مریم", "created_at": "2024-01-14"}
-  ],
-  "comparison": {
-    "sync_status": "synced",
-    "mysql_total": 100,
-    "postgres_total": 100
-  }
-}
-```
-
-## 🔍 عیب‌یابی آمار صفر
-
-اگر تعداد INSERT/UPDATE/DELETE صفر است:
-
-### 1. بررسی اتصال Debezium:
-```bash
-# بررسی وضعیت کانکتورها
-curl http://localhost:8083/connectors/mysql-source-connector/status
-```
-
-### 2. بررسی Kafka Topics:
-```bash
-# مشاهده Topic ها
-docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092
-
-# مشاهده پیام‌ها
-docker exec -it kafka kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
-  --topic adtrace_users \
-  --from-beginning
-```
-
-### 3. تست CDC:
-```bash
-# اضافه کردن داده تستی به MySQL
-docker exec -it mysql mysql -u debezium -pdbz -e \
-  "INSERT INTO inventory.users (name, email) VALUES ('تست', 'test@example.com')"
-```
-
-## 📊 مانیتورینگ Real-time
-
-Dashboard هر 30 ثانیه آپدیت می‌شود و نشان می‌دهد:
-- تعداد Events پردازش شده توسط CDC
-- آخرین Event دریافت شده
-- وضعیت هر جدول
-- درصد پیشرفت Sync
-
-## 🛠️ تنظیمات پیشرفته
-
-### تغییر جداول تحت نظارت:
-فایل `debezium/mysql-source-connector.json`:
-```json
-{
-  "table.include.list": "database.table1,database.table2"
-}
-```
-
-### تنظیم حافظه Redis:
-فایل `docker-compose.yml`:
-```yaml
-redis:
-  command: redis-server --maxmemory 512mb
-```
-
-این سیستم به شما امکان مهاجرت real-time و نظارت دقیق بر فرآیند انتقال داده‌ها را می‌دهد.
-
-## 🚨 مدیریت خطاها
-
-### مشکلات رایج و راه‌حل‌ها
-
-1. **Debezium Connector متصل نمی‌شود:**
-   ```bash
-   # بررسی وضعیت connector
-   curl http://localhost:8083/connectors/mysql-source-connector/status
-   
-   # ریستارت connector
-   curl -X POST http://localhost:8083/connectors/mysql-source-connector/restart
-   ```
-
-2. **Data Validation خطا می‌دهد:**
-   ```bash
-   # بررسی لاگ‌های validator
-   docker logs data-validator
-   
-   # ریست کردن validation status
-   curl -X POST http://localhost:8000/reset-migration
-   ```
-
-3. **PostgreSQL Out of Sync:**
-   ```bash
-   # Sync manual یک رکورد خاص
-   curl -X POST http://localhost:8000/sync-record \
-     -H "Content-Type: application/json" \
-     -d '{"table_name": "users", "mysql_id": 1, "operation": "INSERT"}'
-   ```
-
-## 📁 ساختار پروژه
-
-```
-migration_to_postgress/
-├── docker-compose.yml              # تعریف کل سیستم
-├── mysql/                          # تنظیمات MySQL
-│   ├── my.cnf                     # کانفیگ MySQL
-│   └── init.sql                   # اسکریپت اولیه
-├── postgres/                       # تنظیمات PostgreSQL
-│   └── init.sql                   # اسکریپت اولیه
-├── services/
-│   ├── data-validator/            # سرویس اعتبارسنجی
-│   │   ├── main.py               # اپلیکیشن اصلی
-│   │   ├── database/             # کلاینت‌های دیتابیس
-│   │   ├── services/             # سرویس‌های validation
-│   │   └── models/               # مدل‌های داده
-│   └── monitoring-dashboard/      # داشبورد مانیتورینگ
-│       ├── server.js             # سرور Node.js
-│       └── public/               # فایل‌های استاتیک
-└── scripts/                        # اسکریپت‌های کمکی
-    ├── setup-debezium.sh         # راه‌اندازی Debezium
-    └── test-migration.sh          # تست سیستم
-```
-
-## 🔒 امنیت
-
-- تمام passwordها در environment variables
-- Network isolation در Docker
-- Access control برای API endpoints
-- SSL/TLS برای production (نیاز به تنظیم اضافی)
-
-## 📚 مستندات اضافی
-
-### Debezium Configuration
-
-برای تنظیمات پیشرفته‌تر Debezium:
-
-```json
-{
-  "snapshot.mode": "initial",
-  "snapshot.locking.mode": "minimal",
-  "decimal.handling.mode": "precise",
-  "time.precision.mode": "adaptive"
-}
-```
-
-### Monitoring Metrics
-
-متریک‌های کلیدی برای نظارت:
-
-- **Lag Metrics**: تاخیر در انتقال داده
-- **Error Rates**: نرخ خطاها
-- **Throughput**: تعداد رکوردهای پردازش شده
-- **Data Consistency**: میزان تطابق داده‌ها
-
-## 🤝 مشارکت
-
-برای مشارکت در پروژه:
-
-1. Fork کردن repository
-2. ایجاد branch جدید
-3. Commit کردن تغییرات
-4. Push به branch
-5. ایجاد Pull Request
-
-## 📄 مجوز
-
-این پروژه تحت مجوز MIT منتشر شده است.
-
-## 🆘 پشتیبانی
-
-برای دریافت کمک:
-
-1. بررسی Issue های موجود در GitHub
-2. ایجاد Issue جدید با جزئیات مشکل
-3. اجرای `docker logs <service-name>` برای بررسی لاگ‌ها
-
----
-
-**نکته**: این پروژه برای محیط development و test طراحی شده است. برای استفاده در production نیاز به تنظیمات امنیتی و performance اضافی دارد. 
+This architecture ensures that any change in MySQL is immediately detected, processed, and reflected in the monitoring system without requiring manual configuration or intervention.

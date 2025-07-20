@@ -20,7 +20,7 @@ class DataValidator:
         self.redis = redis_client
         self.tables_to_sync = ['users', 'products', 'orders', 'order_items']
     
-    def _calculate_row_hash(self, row_data: Dict[str, Any]) -> str:
+    def _calculate_row_hash(self, row_data: Dict[str, Any], table_name: str = None) -> str:
         """Calculate hash for a row to detect changes"""
         # Convert row to JSON string and hash it
         # Handle datetime and other non-serializable objects
@@ -35,6 +35,55 @@ class DataValidator:
         
         json_str = json.dumps(serializable_data, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
+    
+    def _normalize_mysql_data(self, row_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize MySQL data for comparison"""
+        normalized = {}
+        for key, value in row_data.items():
+            # Handle MySQL specific data types
+            if isinstance(value, datetime):
+                normalized[key] = value.isoformat()
+            elif isinstance(value, bytes):
+                normalized[key] = value.decode('utf-8', errors='ignore')
+            elif value is None:
+                normalized[key] = None
+            elif isinstance(value, (int, float)):
+                normalized[key] = str(value)
+            else:
+                normalized[key] = str(value).strip()
+        return normalized
+    
+    def _normalize_postgres_data(self, row_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize PostgreSQL data for comparison"""
+        normalized = {}
+        for key, value in row_data.items():
+            # Handle PostgreSQL specific data types
+            if isinstance(value, datetime):
+                normalized[key] = value.isoformat()
+            elif value is None:
+                normalized[key] = None
+            elif isinstance(value, (int, float)):
+                normalized[key] = str(value)
+            elif isinstance(value, dict):
+                # Handle JSON fields
+                normalized[key] = json.dumps(value, sort_keys=True)
+            else:
+                normalized[key] = str(value).strip()
+        return normalized
+    
+    def _get_primary_key(self, table_name: str) -> str:
+        """Get primary key column name for a table"""
+        # Try to get primary key from schema
+        try:
+            mysql_schema = self.mysql.get_table_schema(table_name)
+            for col in mysql_schema:
+                if col.get('Key') == 'PRI':
+                    return col.get('Field', 'id')
+        except Exception:
+            pass
+        
+        # Default fallback
+        return 'id'
     
     def _transform_mysql_to_postgres(self, table_name: str, mysql_record: Dict[str, Any]) -> Dict[str, Any]:
         """Transform MySQL record to PostgreSQL format"""
@@ -57,7 +106,7 @@ class DataValidator:
     
     async def validate_table(self, table_name: str, quick_check: bool = True) -> ValidationResult:
         """Validate data consistency between MySQL and PostgreSQL for a specific table"""
-        logger.info(f"🔍 Validating table: {table_name} (quick_check: {quick_check})")
+        logger.info(f"Validating table: {table_name} (quick_check: {quick_check})")
         
         try:
             # Get row counts
@@ -104,11 +153,11 @@ class DataValidator:
             }
             self.redis.setex(cache_key, 3600, json.dumps(result_dict))
             
-            logger.info(f"✅ Validation completed for {table_name}: consistent={result.is_consistent}")
+            logger.info(f"Validation completed for {table_name}: consistent={result.is_consistent}")
             return result
             
         except Exception as e:
-            logger.error(f"❌ Validation failed for table {table_name}: {str(e)}")
+            logger.error(f"Validation failed for table {table_name}: {str(e)}")
             return ValidationResult(
                 table_name=table_name,
                 mysql_count=0,
@@ -126,33 +175,49 @@ class DataValidator:
             mysql_data = self.mysql.get_table_data(table_name)
             postgres_data = self.postgres.get_table_data(table_name)
             
-            # Compare data
+            # Compare data length
             if len(mysql_data) != len(postgres_data):
                 result.discrepancies.append(f"Data length mismatch: MySQL={len(mysql_data)}, PostgreSQL={len(postgres_data)}")
                 result.is_consistent = False
                 return
             
-            # Compare each record
-            discrepancy_count = 0
-            for idx in range(len(mysql_data)):
-                mysql_row = mysql_data.iloc[idx].to_dict()
-                
-                # Find corresponding PostgreSQL row (assuming same order or matching by a key)
-                if idx < len(postgres_data):
-                    postgres_row = postgres_data.iloc[idx].to_dict()
-                    
-                    # Compare critical fields (excluding auto-generated timestamps that might differ)
-                    mysql_hash = self._calculate_row_hash(mysql_row)
-                    postgres_hash = self._calculate_row_hash(postgres_row)
-                    
-                    if mysql_hash != postgres_hash:
-                        discrepancy_count += 1
-                        if discrepancy_count <= 10:  # Limit detailed discrepancy reporting
-                            result.discrepancies.append(f"Row {idx}: Data mismatch")
+            # Get primary key for better matching
+            primary_key = self._get_primary_key(table_name)
             
-            if discrepancy_count > 0:
+            # Convert to dictionaries for easier processing
+            mysql_records = [mysql_data.iloc[i].to_dict() for i in range(len(mysql_data))]
+            postgres_records = [postgres_data.iloc[i].to_dict() for i in range(len(postgres_data))]
+            
+            # Compare each record
+            mismatches = 0
+            for mysql_row, postgres_row in zip(mysql_records, postgres_records):
+                mysql_normalized = self._normalize_mysql_data(mysql_row)
+                postgres_normalized = self._normalize_postgres_data(postgres_row)
+                
+                mysql_hash = self._calculate_row_hash(mysql_normalized, table_name)
+                postgres_hash = self._calculate_row_hash(postgres_normalized, table_name)
+                
+                if mysql_hash != postgres_hash:
+                    mismatches += 1
+                    pk_value = mysql_row.get(primary_key)
+                    
+                    if mismatches <= 10: 
+                        result.discrepancies.append(
+                            f"Mismatch at {primary_key}={pk_value}"
+                        )
+                        
+                        # Show detailed field differences
+                        for key in mysql_normalized.keys():
+                            mysql_val = mysql_normalized.get(key)
+                            postgres_val = postgres_normalized.get(key)
+                            if mysql_val != postgres_val:
+                                result.discrepancies.append(
+                                    f"  Field '{key}': MySQL='{mysql_val}' vs PostgreSQL='{postgres_val}'"
+                                )
+            
+            if mismatches > 0:
                 result.is_consistent = False
-                result.discrepancies.append(f"Total data mismatches: {discrepancy_count}")
+                result.discrepancies.append(f"Total mismatches: {mismatches}")
                 
         except Exception as e:
             result.discrepancies.append(f"Full validation error: {str(e)}")
@@ -160,7 +225,7 @@ class DataValidator:
     
     async def validate_all_tables(self, quick_check: bool = True) -> List[ValidationResult]:
         """Validate all tables"""
-        logger.info(f"🔍 Starting validation of all tables (quick_check: {quick_check})")
+        logger.info(f"Starting validation of all tables (quick_check: {quick_check})")
         
         results = []
         for table_name in self.tables_to_sync:
@@ -177,12 +242,12 @@ class DataValidator:
         }
         self.redis.setex('validation:overall', 1800, json.dumps(overall_status))
         
-        logger.info(f"✅ Overall validation completed: {overall_status}")
+        logger.info(f"Overall validation completed: {overall_status}")
         return results
     
     async def sync_record(self, table_name: str, mysql_id: int, operation: str) -> bool:
         """Sync a specific record from MySQL to PostgreSQL"""
-        logger.info(f"🔄 Syncing record: {table_name}.{mysql_id} ({operation})")
+        logger.info(f"Syncing record: {table_name}.{mysql_id} ({operation})")
         
         try:
             if operation.upper() == 'INSERT':
@@ -196,7 +261,7 @@ class DataValidator:
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Failed to sync record {table_name}.{mysql_id}: {str(e)}")
+            logger.error(f"Failed to sync record {table_name}.{mysql_id}: {str(e)}")
             return False
     
     async def _sync_insert(self, table_name: str, mysql_id: int) -> bool:
@@ -222,7 +287,7 @@ class DataValidator:
                 # Update Redis stats
                 self._update_redis_stats(table_name, 'INSERT')
                 
-                logger.info(f"✅ Successfully synced INSERT: {table_name}.{mysql_id}")
+                logger.info(f"Successfully synced INSERT: {table_name}.{mysql_id}")
                 return True
             
             return False
@@ -254,7 +319,7 @@ class DataValidator:
                 # Update Redis stats
                 self._update_redis_stats(table_name, 'UPDATE')
                 
-                logger.info(f"✅ Successfully synced UPDATE: {table_name}.{mysql_id}")
+                logger.info(f"Successfully synced UPDATE: {table_name}.{mysql_id}")
                 return True
             
             return False
@@ -276,7 +341,7 @@ class DataValidator:
                 # Update Redis stats
                 self._update_redis_stats(table_name, 'DELETE')
                 
-                logger.info(f"✅ Successfully synced DELETE: {table_name}.{mysql_id}")
+                logger.info(f"Successfully synced DELETE: {table_name}.{mysql_id}")
                 return True
             
             return False
@@ -337,7 +402,7 @@ class DataValidator:
             # Clear migration log
             self.postgres.execute_query("TRUNCATE TABLE migration_log")
             
-            logger.info("✅ Migration status reset successfully")
+            logger.info("Migration status reset successfully")
             
         except Exception as e:
             logger.error(f"Failed to reset migration status: {str(e)}")

@@ -20,7 +20,7 @@ class DebeziumKafkaConsumer:
     def start_consuming(self):
         """Start consuming Debezium CDC events from Kafka"""
         try:
-            logger.info("🚀 Initializing Kafka Consumer...")
+            logger.info("Initializing Kafka Consumer...")
             
             # Subscribe to inventory table topics (Debezium creates topics with table names)
             self.consumer = KafkaConsumer(
@@ -39,7 +39,7 @@ class DebeziumKafkaConsumer:
             inventory_topics = ['users', 'products', 'orders', 'order_items']
             self.consumer.subscribe(inventory_topics)
             
-            logger.info(f"🔄 Debezium CDC Consumer started, listening for inventory topics: {inventory_topics}")
+            logger.info(f"Debezium CDC Consumer started, listening for inventory topics: {inventory_topics}")
             logger.info(f"📡 Bootstrap servers: {self.bootstrap_servers}")
             self.running = True
             
@@ -51,35 +51,35 @@ class DebeziumKafkaConsumer:
                     message_batch = self.consumer.poll(timeout_ms=1000)
                     
                     if message_batch:
-                        logger.info(f"📨 Received {len(message_batch)} topic partitions with messages")
+                        logger.info(f"Received {len(message_batch)} topic partitions with messages")
                     
                     for topic_partition, messages in message_batch.items():
-                        logger.info(f"📋 Processing {len(messages)} messages from {topic_partition.topic}")
+                        logger.info(f"Processing {len(messages)} messages from {topic_partition.topic}")
                         for message in messages:
                             message_count += 1
-                            logger.info(f"🔍 Processing message #{message_count} from topic {topic_partition.topic}")
+                            logger.info(f"Processing message #{message_count} from topic {topic_partition.topic}")
                             # Process event synchronously to avoid async issues
                             self.process_cdc_event_sync(message, topic_partition.topic)
                     
                     # Log every 60 seconds that we're still listening
                     if message_count % 60 == 0:
-                        logger.info(f"👂 Still listening for CDC events... (processed: {message_count})")
+                        logger.info(f"Still listening for CDC events... (processed: {message_count})")
                             
                 except Exception as e:
-                    logger.error(f"❌ Error polling Kafka messages: {str(e)}")
+                    logger.error(f"Error polling Kafka messages: {str(e)}")
                     continue
                     
         except Exception as e:
-            logger.error(f"💥 Failed to start Kafka consumer: {str(e)}")
+            logger.error(f"Failed to start Kafka consumer: {str(e)}")
             import traceback
-            logger.error(f"📜 Traceback: {traceback.format_exc()}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             
     def stop_consuming(self):
         """Stop consuming CDC events"""
         self.running = False
         if self.consumer:
             self.consumer.close()
-            logger.info("🛑 Debezium CDC Consumer stopped")
+            logger.info("Debezium CDC Consumer stopped")
     
     def process_cdc_event_sync(self, message, topic):
         """Process a single CDC event from Debezium (synchronous version)"""
@@ -109,7 +109,7 @@ class DebeziumKafkaConsumer:
                 # Update table sync status (synchronous)
                 self.update_table_sync_status_sync(table_name, operation)
                 
-                logger.info(f"📝 CDC Event: {operation} on {table_name} (Total: {self.global_stats['cdc_events_processed']})")
+                logger.info(f"CDC Event: {operation} on {table_name} (Total: {self.global_stats['cdc_events_processed']})")
                 
         except Exception as e:
             logger.error(f"Failed to process CDC event: {str(e)}")
