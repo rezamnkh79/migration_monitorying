@@ -1,0 +1,28 @@
+{
+    "name": "mysql-source-connector-inventory",
+    "config": {
+        "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+        "tasks.max": "1",
+        "database.hostname": "mysql",
+        "database.port": "3306",
+        "database.user": "debezium",
+        "database.password": "dbz",
+        "database.server.id": "184055",
+        "database.server.name": "inventory_mysql",
+        "database.include.list": "inventory",
+        "table.include.list": "inventory.users,inventory.products,inventory.orders,inventory.order_items",
+        "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+        "schema.history.internal.kafka.topic": "schema-changes.inventory",
+        "include.schema.changes": "true",
+        "topic.prefix": "inventory",
+        "snapshot.mode": "initial",
+        "transforms": "route",
+        "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+        "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
+        "transforms.route.replacement": "$3",
+        "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+        "key.converter.schemas.enable": "false",
+        "value.converter.schemas.enable": "false"
+    }
+} 

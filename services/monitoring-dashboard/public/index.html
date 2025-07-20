@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Migration Dashboard - MySQL to PostgreSQL - v2.0</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Arial', sans-serif; }
+        .status-healthy { color: #28a745; }
+        .status-warning { color: #ffc107; }
+        .status-error { color: #dc3545; }
+        .metric-card { min-height: 120px; }
+        .real-time-indicator { 
+            width: 10px; 
+            height: 10px; 
+            border-radius: 50%; 
+            display: inline-block; 
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        .real-time-indicator.active { background-color: #28a745; }
+        .real-time-indicator.inactive { background-color: #dc3545; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .log-entry { 
+            font-family: 'Courier New', monospace; 
+            font-size: 0.9em;
+            border-left: 3px solid #007bff;
+            padding-left: 10px;
+            margin-bottom: 5px;
+        }
+        
+        .progress-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: conic-gradient(#28a745 0deg, #28a745 var(--progress, 0deg), #e9ecef var(--progress, 0deg));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .progress-circle::before {
+            content: '';
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+        }
+        
+        .progress-text {
+            position: relative;
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Header -->
+        <header class="bg-primary text-white p-3 mb-4">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h1 class="mb-0">
+                        <i class="fas fa-database me-2"></i>
+                        MySQL to PostgreSQL Migration Dashboard
+                    </h1>
+                </div>
+                <div class="col-auto">
+                    <span class="real-time-indicator active" id="connectionStatus"></span>
+                    <span id="connectionText">Connected</span>
+                    <small class="d-block" id="lastUpdate">Last Update: --</small>
+                </div>
+            </div>
+        </header>
+
+        <!-- Status Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card metric-card bg-info text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-database fa-2x mb-2"></i>
+                        <h5>MySQL</h5>
+                        <p class="mb-0" id="mysqlStatus">Checking...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card bg-success text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-elephant fa-2x mb-2"></i>
+                        <h5>PostgreSQL</h5>
+                        <p class="mb-0" id="postgresStatus">Checking...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-stream fa-2x mb-2"></i>
+                        <h5>Kafka</h5>
+                        <p class="mb-0" id="kafkaStatus">Checking...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card bg-secondary text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-memory fa-2x mb-2"></i>
+                        <h5>Redis</h5>
+                        <p class="mb-0" id="redisStatus">Checking...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Sync Check Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-sync-alt me-2"></i>
+                            Debezium CDC Status & Manual Sync Check
+                        </h5>
+                        <div>
+                            <button id="debeziumStatusBtn" class="btn btn-info me-2" onclick="checkDebeziumStatus()">
+                                <i class="fas fa-stream me-2"></i>
+                                Check CDC Status
+                            </button>
+                            <button id="syncCheckBtn" class="btn btn-primary" onclick="performSyncCheck()">
+                                <i class="fas fa-check-double me-2"></i>
+                                Check Sync Status
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- CDC Status Display -->
+                        <div id="cdcStatusResult" class="mb-3">
+                            <div class="row">
+                                <!-- CDC Events counter hidden - not working properly
+                                <div class="col-md-3">
+                                    <div class="text-center p-2 bg-light rounded">
+                                        <h5 class="text-primary" id="cdcEventsCount">0</h5>
+                                        <small>CDC Events Processed</small>
+                                    </div>
+                                </div>
+                                -->
+                                <div class="col-md-4">
+                                    <div class="text-center p-2 bg-light rounded">
+                                        <span class="badge bg-secondary" id="mysqlConnectorStatus">Unknown</span>
+                                        <br><small>MySQL Connector</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center p-2 bg-light rounded">
+                                        <span class="badge bg-secondary" id="postgresConnectorStatus">Unknown</span>
+                                        <br><small>PostgreSQL Connector</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center p-2 bg-light rounded">
+                                        <small class="text-muted" id="lastCdcEvent">No events yet</small>
+                                        <br><small>Last CDC Event</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="syncCheckResult" class="d-none">
+                            <div class="alert alert-info">
+                                <h6><i class="fas fa-info-circle me-2"></i>Sync Check Results</h6>
+                                <div id="syncCheckContent"></div>
+                            </div>
+                        </div>
+                        <p class="text-muted mb-0">
+                            Monitor real-time CDC events from Debezium and manually check if MySQL and PostgreSQL data are synchronized. 
+                            This compares row counts and shows sample data from each table.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Migration Overview -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line me-2"></i>
+                            Table Migration Status
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Table Name</th>
+                                        <th>MySQL</th>
+                                        <th>PostgreSQL</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tablesStatus">
+                                    <tr>
+                                        <td colspan="5" class="text-center">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>
+                            Overall Progress
+                        </h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="progress-circle mx-auto mb-3" id="overallProgress">
+                            <span class="progress-text">0%</span>
+                        </div>
+                        <p class="mb-2">Tables Synchronized</p>
+                        <small class="text-muted" id="progressDetails">0 of 0 tables</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sync Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-plus-circle fa-2x text-success mb-2"></i>
+                        <h3 class="mb-0" id="insertCount">0</h3>
+                        <p class="text-muted">INSERT operations</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-edit fa-2x text-warning mb-2"></i>
+                        <h3 class="mb-0" id="updateCount">0</h3>
+                        <p class="text-muted">UPDATE operations</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-trash fa-2x text-danger mb-2"></i>
+                        <h3 class="mb-0" id="deleteCount">0</h3>
+                        <p class="text-muted">DELETE operations</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-check-circle fa-2x text-info mb-2"></i>
+                        <h3 class="mb-0" id="successRate">100%</h3>
+                        <p class="text-muted">Success Rate</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions and Logs -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cogs me-2"></i>
+                            Actions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <button class="btn btn-primary mb-2" onclick="triggerValidation()">
+                            <i class="fas fa-check me-2"></i>
+                            Quick Validation
+                        </button>
+                        <button class="btn btn-warning mb-2" onclick="triggerFullValidation()">
+                            <i class="fas fa-check-double me-2"></i>
+                            Full Validation
+                        </button>
+                        <button class="btn btn-info mb-2" onclick="refreshData()">
+                            <i class="fas fa-sync me-2"></i>
+                            Refresh Data
+                        </button>
+                        <div class="mt-3">
+                            <h6>Add Test Data:</h6>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="addTestUser()">
+                                <i class="fas fa-user-plus me-1"></i>
+                                Test User
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-list me-2"></i>
+                            Latest Events
+                        </h5>
+                    </div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                        <div id="eventLog">
+                            <div class="text-center text-muted">Waiting for events...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="notification" class="toast" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">Notification</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="notificationBody">
+                Message
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let isConnected = false;
+
+        // DOM elements
+        const connectionStatus = document.getElementById('connectionStatus');
+        const connectionText = document.getElementById('connectionText');
+        const lastUpdate = document.getElementById('lastUpdate');
+        const tablesStatus = document.getElementById('tablesStatus');
+        const overallProgress = document.getElementById('overallProgress');
+        const progressDetails = document.getElementById('progressDetails');
+        const eventLog = document.getElementById('eventLog');
+
+        // Socket event listeners
+        socket.on('connect', () => {
+            isConnected = true;
+            updateConnectionStatus();
+            showNotification('Connection established', 'success');
+        });
+
+        socket.on('disconnect', () => {
+            isConnected = false;
+            updateConnectionStatus();
+            showNotification('Connection lost', 'danger');
+        });
+
+        socket.on('dataUpdate', (data) => {
+            console.log('Data update received:', data);
+            console.log('Metrics:', data.metrics);
+            console.log('MySQL table_list:', data.metrics?.database_stats?.mysql?.table_list);
+            updateDashboard(data);
+        });
+
+        socket.on('error', (error) => {
+            console.error('Socket error:', error);
+            showNotification(error.message || 'Error fetching data', 'danger');
+        });
+
+        // Update functions
+        function updateConnectionStatus() {
+            if (isConnected) {
+                connectionStatus.className = 'real-time-indicator active';
+                connectionText.textContent = 'Connected';
+            } else {
+                connectionStatus.className = 'real-time-indicator inactive';
+                connectionText.textContent = 'Disconnected';
+            }
+        }
+
+        function updateDashboard(data) {
+            lastUpdate.textContent = `Last Update: ${new Date().toLocaleTimeString('en-US')}`;
+            
+            // Update service status
+            if (data.metrics) {
+                updateServiceStatus(data.metrics);
+                updateTableStatus(data.metrics);
+                updateSyncStats(data.metrics);
+                
+                // Update CDC status if available
+                if (data.metrics.cdc_stats) {
+                    updateCDCStatus(data.metrics.cdc_stats);
+                }
+            }
+
+            if (data.validation) {
+                updateValidationInfo(data.validation);
+            }
+
+            if (data.kafka) {
+                updateKafkaStatus(data.kafka);
+            }
+
+            // Add event to log
+            addEventToLog(`Data updated - ${new Date().toLocaleTimeString('en-US')}`);
+        }
+
+        function updateServiceStatus(metrics) {
+            const dbStats = metrics.database_stats || {};
+            const healthStatus = metrics.health_status || {};
+
+            // MySQL status
+            const mysqlStatus = dbStats.mysql?.status === 'connected' ? 'Connected' : 'Disconnected';
+            document.getElementById('mysqlStatus').textContent = mysqlStatus;
+
+            // PostgreSQL status
+            const postgresStatus = dbStats.postgres?.status === 'connected' ? 'Connected' : 'Disconnected';
+            document.getElementById('postgresStatus').textContent = postgresStatus;
+
+            // Redis status
+            const redisStatus = healthStatus.redis === 'healthy' ? 'Connected' : 'Disconnected';
+            document.getElementById('redisStatus').textContent = redisStatus;
+        }
+
+        function updateTableStatus(metrics) {
+            console.log('=== updateTableStatus called ===');
+            console.log('Full metrics object:', metrics);
+            
+            const dbStats = metrics.database_stats || {};
+            const mysqlTables = dbStats.mysql?.tables || {};
+            const postgresTables = dbStats.postgres?.tables || {};
+            
+            console.log('MySQL dbStats:', dbStats.mysql);
+            console.log('PostgreSQL dbStats:', dbStats.postgres);
+            
+            // Use dynamic table list from MySQL, fallback to default if not available
+            const mysqlTableList = dbStats.mysql?.table_list || [];
+            console.log('Raw MySQL Table List:', mysqlTableList);
+            console.log('Is array?', Array.isArray(mysqlTableList));
+            console.log('Length?', mysqlTableList.length);
+            
+            // Use MySQL table list if available and not empty, otherwise use fallback
+            let tables;
+            if (mysqlTableList && Array.isArray(mysqlTableList) && mysqlTableList.length > 0) {
+                // Show first 10 tables for performance (reduced from 20)
+                tables = mysqlTableList.slice(0, 10);
+                console.log('✅ USING DYNAMIC TABLES:', tables.length, 'tables');
+                console.log('First 5 dynamic tables:', tables.slice(0, 5));
+            } else {
+                tables = ['users', 'products', 'orders', 'order_items'];
+                console.log('❌ USING FALLBACK TABLES');
+            }
+
+            let html = '';
+            let syncedTables = 0;
+
+            console.log('Processing tables:', tables);
+
+            tables.forEach((table, index) => {
+                const mysqlCount = mysqlTables[table] || 0;
+                const postgresCount = postgresTables[table] || 0;
+                const isSync = mysqlCount === postgresCount;
+                
+                console.log(`Table ${index + 1}: ${table} - MySQL: ${mysqlCount}, PostgreSQL: ${postgresCount}, Synced: ${isSync}`);
+                
+                if (isSync && mysqlCount > 0) syncedTables++;
+
+                const statusIcon = isSync ? 
+                    '<i class="fas fa-check-circle text-success"></i>' : 
+                    '<i class="fas fa-exclamation-triangle text-warning"></i>';
+
+                html += `
+                    <tr>
+                        <td><strong>${table}</strong></td>
+                        <td>${mysqlCount.toLocaleString('en-US')}</td>
+                        <td>${postgresCount.toLocaleString('en-US')}</td>
+                        <td>${statusIcon} ${isSync ? 'Synced' : 'Out of Sync'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${table}')" title="View latest 5 records">
+                                <i class="fas fa-eye"></i> Latest
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            console.log('Generated HTML length:', html.length);
+            console.log('Setting innerHTML...');
+            
+            tablesStatus.innerHTML = html;
+
+            // Update progress
+            const progress = (syncedTables / tables.length) * 100;
+            updateProgressCircle(progress);
+            progressDetails.textContent = `${syncedTables} of ${tables.length} tables`;
+            
+            console.log(`Progress: ${syncedTables}/${tables.length} = ${progress.toFixed(1)}%`);
+            console.log('=== updateTableStatus completed ===');
+        }
+
+        function updateSyncStats(metrics) {
+            const syncStats = metrics.sync_stats || {};
+            const total = syncStats.total || {};
+            const globalLive = syncStats.global_live || {};
+            const redisDaily = syncStats.redis_daily || {};
+
+            // Use the combined total stats
+            document.getElementById('insertCount').textContent = (total.insert || 0).toLocaleString('en-US');
+            document.getElementById('updateCount').textContent = (total.update || 0).toLocaleString('en-US');
+            document.getElementById('deleteCount').textContent = (total.delete || 0).toLocaleString('en-US');
+            
+            // Add tooltips to show breakdown
+            const insertEl = document.getElementById('insertCount');
+            const updateEl = document.getElementById('updateCount');
+            const deleteEl = document.getElementById('deleteCount');
+            
+            insertEl.title = `Live CDC: ${globalLive.insert || 0}, Daily: ${redisDaily.insert || 0}`;
+            updateEl.title = `Live CDC: ${globalLive.update || 0}, Daily: ${redisDaily.update || 0}`;
+            deleteEl.title = `Live CDC: ${globalLive.delete || 0}, Daily: ${redisDaily.delete || 0}`;
+        }
+
+        // Function to show latest records for a table
+        async function showLatestRecords(tableName) {
+            try {
+                const response = await fetch(`/api/latest-records/${tableName}?limit=5`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayLatestRecords(data);
+                
+            } catch (error) {
+                console.error('Error fetching latest records:', error);
+                showNotification('Failed to fetch latest records: ' + error.message, 'danger');
+            }
+        }
+
+        function displayLatestRecords(data) {
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-table me-2"></i>
+                                Latest Records: ${data.table_name}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    <div class="alert alert-info">
+                                        <strong>Sync Status:</strong> ${data.comparison.sync_status} | 
+                                        <strong>MySQL Total:</strong> ${data.comparison.mysql_total || 0} | 
+                                        <strong>PostgreSQL Total:</strong> ${data.comparison.postgres_total || 0}
+                                        ${data.comparison.sync_percentage ? ` | <strong>Progress:</strong> ${data.comparison.sync_percentage.toFixed(1)}%` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-database text-primary me-2"></i>MySQL Latest Records</h6>
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        ${generateRecordsTable(data.mysql_latest, 'MySQL')}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6><i class="fas fa-elephant text-success me-2"></i>PostgreSQL Latest Records</h6>
+                                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                        ${generateRecordsTable(data.postgres_latest, 'PostgreSQL')}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${data.cdc_info ? `
+                                <div class="row mt-3">
+                                    <div class="col-md-12">
+                                        <h6><i class="fas fa-stream text-warning me-2"></i>CDC Information</h6>
+                                        <div class="alert alert-secondary">
+                                            <strong>Total CDC Events:</strong> ${data.cdc_info.events_processed || 0} | 
+                                            <strong>Last Event:</strong> ${data.cdc_info.last_event ? 
+                                                `${data.cdc_info.last_event.operation} on ${data.cdc_info.last_event.table}` : 
+                                                'No events yet'}
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" onclick="showLatestRecords('${data.table_name}')">
+                                <i class="fas fa-sync me-2"></i>Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            const bootstrapModal = new bootstrap.Modal(modal);
+            bootstrapModal.show();
+            
+            // Remove modal from DOM when hidden
+            modal.addEventListener('hidden.bs.modal', () => {
+                document.body.removeChild(modal);
+            });
+        }
+
+        function generateRecordsTable(records, dbType) {
+            if (!records || records.length === 0) {
+                return `<div class="text-center text-muted p-3">No records found in ${dbType}</div>`;
+            }
+            
+            const columns = Object.keys(records[0]);
+            let html = `
+                <table class="table table-sm table-striped">
+                    <thead class="table-dark">
+                        <tr>
+            `;
+            
+            columns.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += `</tr></thead><tbody>`;
+            
+            records.forEach(record => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    let value = record[col];
+                    if (value === null) value = '<em>NULL</em>';
+                    else if (typeof value === 'string' && value.length > 50) {
+                        value = value.substring(0, 50) + '...';
+                    }
+                    html += `<td title="${record[col]}">${value}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            return html;
+        }
+
+        function updateValidationInfo(validation) {
+            // Update validation specific metrics
+        }
+
+        function updateKafkaStatus(kafka) {
+            if (kafka) {
+                const status = kafka.is_running ? 'Active' : 'Inactive';
+                document.getElementById('kafkaStatus').textContent = status;
+                
+                if (kafka.success_rate !== undefined) {
+                    const rate = Math.round(kafka.success_rate * 100);
+                    document.getElementById('successRate').textContent = `${rate}%`;
+                }
+            }
+        }
+
+        function updateProgressCircle(percentage) {
+            const circle = document.getElementById('overallProgress');
+            const text = circle.querySelector('.progress-text');
+            
+            const degrees = (percentage / 100) * 360;
+            circle.style.setProperty('--progress', `${degrees}deg`);
+            text.textContent = `${Math.round(percentage)}%`;
+        }
+
+        function addEventToLog(message) {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<small class="text-muted">[${new Date().toLocaleTimeString('en-US')}]</small> ${message}`;
+            
+            log.insertBefore(entry, log.firstChild);
+            
+            // Keep only last 10 entries
+            while (log.children.length > 10) {
+                log.removeChild(log.lastChild);
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            const body = document.getElementById('notificationBody');
+            
+            body.textContent = message;
+            notification.className = `toast bg-${type} text-white`;
+            
+            const toast = new bootstrap.Toast(notification);
+            toast.show();
+        }
+
+        // Action functions
+        function triggerValidation() {
+            fetch('/api/trigger-validation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fullValidation: false })
+            })
+            .then(response => response.json())
+            .then(data => {
+                showNotification('Quick validation triggered', 'success');
+                addEventToLog('Quick validation triggered');
+            })
+            .catch(error => {
+                showNotification('Error triggering quick validation', 'danger');
+            });
+        }
+
+        function triggerFullValidation() {
+            fetch('/api/trigger-validation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fullValidation: true })
+            })
+            .then(response => response.json())
+            .then(data => {
+                showNotification('Full validation triggered', 'success');
+                addEventToLog('Full validation triggered');
+            })
+            .catch(error => {
+                showNotification('Error triggering full validation', 'danger');
+            });
+        }
+
+        // Manual Sync Check Function
+        async function performSyncCheck() {
+            const btn = document.getElementById('syncCheckBtn');
+            const resultDiv = document.getElementById('syncCheckResult');
+            const contentDiv = document.getElementById('syncCheckContent');
+            
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Checking...';
+            resultDiv.classList.remove('d-none');
+            contentDiv.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Checking sync status...</div>';
+            
+            try {
+                const response = await fetch('http://localhost:8000/sync-check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displaySyncResults(data);
+                
+                // Update CDC status from sync check response
+                if (data.cdc_status) {
+                    updateCDCStatus(data.cdc_status);
+                }
+                
+                showNotification('Sync check completed', 'success');
+                addEventToLog('Manual sync check performed');
+                
+            } catch (error) {
+                console.error('Sync check error:', error);
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error performing sync check: ${error.message}
+                    </div>
+                `;
+                showNotification('Sync check failed', 'danger');
+            } finally {
+                // Reset button
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-double me-2"></i>Check Sync Status';
+            }
+        }
+
+        // Debezium Status Check Function
+        async function checkDebeziumStatus() {
+            const btn = document.getElementById('debeziumStatusBtn');
+            
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Checking...';
+            
+            try {
+                const response = await fetch('http://localhost:8000/debezium/status', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.cdc_stats) {
+                    updateCDCStatus(data.cdc_stats);
+                }
+                
+                showNotification('CDC status updated', 'success');
+                addEventToLog('Debezium status checked');
+                
+            } catch (error) {
+                console.error('CDC status check error:', error);
+                showNotification('Failed to check CDC status: ' + error.message, 'danger');
+            } finally {
+                // Reset button
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-stream me-2"></i>Check CDC Status';
+            }
+        }
+
+        // Update CDC Status Display
+        function updateCDCStatus(cdcStats) {
+            try {
+                // CDC events count update commented out - not working properly
+                // document.getElementById('cdcEventsCount').textContent = 
+                //     (cdcStats.events_processed || 0).toLocaleString('en-US');
+                
+                // Update connector statuses
+                const mysqlStatus = cdcStats.connector_status?.mysql || cdcStats.connectors?.mysql || 'unknown';
+                const postgresStatus = cdcStats.connector_status?.postgres || cdcStats.connectors?.postgres || 'unknown';
+                
+                updateConnectorStatusBadge('mysqlConnectorStatus', mysqlStatus);
+                updateConnectorStatusBadge('postgresConnectorStatus', postgresStatus);
+                
+                // Update last event
+                const lastEvent = cdcStats.last_event || cdcStats.last_cdc_event;
+                if (lastEvent) {
+                    const eventText = `${lastEvent.operation} on ${lastEvent.table}`;
+                    document.getElementById('lastCdcEvent').textContent = eventText;
+                } else {
+                    document.getElementById('lastCdcEvent').textContent = 'No events yet';
+                }
+                
+            } catch (error) {
+                console.error('Error updating CDC status:', error);
+            }
+        }
+
+        function updateConnectorStatusBadge(elementId, status) {
+            const element = document.getElementById(elementId);
+            
+            // Clean up status text
+            const cleanStatus = status.toLowerCase();
+            
+            // Set badge color based on status
+            element.className = 'badge';
+            if (cleanStatus === 'running' || cleanStatus === 'connected') {
+                element.className += ' bg-success';
+                element.textContent = 'Running';
+            } else if (cleanStatus === 'paused') {
+                element.className += ' bg-warning';
+                element.textContent = 'Paused';
+            } else if (cleanStatus === 'failed' || cleanStatus === 'error') {
+                element.className += ' bg-danger';
+                element.textContent = 'Failed';
+            } else {
+                element.className += ' bg-secondary';
+                element.textContent = 'Unknown';
+            }
+        }
+
+        function displaySyncResults(data) {
+            const contentDiv = document.getElementById('syncCheckContent');
+            
+            let html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-database text-primary me-2"></i>MySQL Tables (${data.mysql_tables?.length || 0})</h6>
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Table</th>
+                                        <th>Count</th>
+                                        <th>Sample Data</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            // Display MySQL tables
+            if (data.mysql_tables && data.mysql_tables.length > 0) {
+                data.mysql_tables.slice(0, 10).forEach(table => {
+                    const count = data.mysql_counts?.[table.name] || 'N/A';
+                    const samples = table.sample_data || [];
+                    const sampleText = samples.length > 0 ? `${samples.length} records` : 'No data';
+                    
+                    html += `
+                        <tr>
+                            <td><code>${table.name}</code></td>
+                            <td><span class="badge bg-primary">${count}</span></td>
+                            <td><small class="text-muted">${sampleText}</small></td>
+                        </tr>
+                    `;
+                });
+            } else {
+                html += '<tr><td colspan="3" class="text-center text-muted">No MySQL data available</td></tr>';
+            }
+            
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-elephant text-success me-2"></i>PostgreSQL Tables (${data.postgres_tables?.length || 0})</h6>
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Table</th>
+                                        <th>Count</th>
+                                        <th>Sample Data</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            // Display PostgreSQL tables
+            if (data.postgres_tables && data.postgres_tables.length > 0) {
+                data.postgres_tables.slice(0, 10).forEach(table => {
+                    const count = data.postgres_counts?.[table.name] || 'N/A';
+                    const samples = table.sample_data || [];
+                    const sampleText = samples.length > 0 ? `${samples.length} records` : 'No data';
+                    
+                    html += `
+                        <tr>
+                            <td><code>${table.name}</code></td>
+                            <td><span class="badge bg-success">${count}</span></td>
+                            <td><small class="text-muted">${sampleText}</small></td>
+                        </tr>
+                    `;
+                });
+            } else {
+                html += '<tr><td colspan="3" class="text-center text-muted">No PostgreSQL data available</td></tr>';
+            }
+            
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add sync summary
+            if (data.sync_summary) {
+                html += `
+                    <div class="mt-3">
+                        <h6><i class="fas fa-chart-bar me-2"></i>Sync Summary</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center p-2 bg-light rounded">
+                                    <h5 class="text-success">${data.sync_summary.synced || 0}</h5>
+                                    <small>Synced Tables</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-2 bg-light rounded">
+                                    <h5 class="text-warning">${data.sync_summary.different || 0}</h5>
+                                    <small>Different Counts</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center p-2 bg-light rounded">
+                                    <h5 class="text-danger">${data.sync_summary.missing || 0}</h5>
+                                    <small>Missing Tables</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            contentDiv.innerHTML = html;
+        }
+
+        function refreshData() {
+            // Show loading in main table
+            tablesStatus.innerHTML = '<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading real data...</td></tr>';
+            showNotification('Fetching real data from databases...', 'info');
+            
+            // Use the sync-check endpoint to get real data
+            fetch('http://localhost:8000/sync-check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Update main table with real data
+                updateMainTableWithRealData(data);
+                showNotification('Real data loaded successfully!', 'success');
+                addEventToLog('Real data refreshed from databases');
+                
+                // Update last update time
+                lastUpdate.textContent = `Last Update: ${new Date().toLocaleTimeString('en-US')}`;
+            })
+            .catch(error => {
+                console.error('Refresh data error:', error);
+                tablesStatus.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load real data</td></tr>';
+                showNotification('Failed to refresh data: ' + error.message, 'danger');
+            });
+        }
+        
+        function updateMainTableWithRealData(syncData) {
+            console.log('=== Updating main table with real sync data ===');
+            
+            // Get all unique table names from both MySQL and PostgreSQL
+            const mysqlTables = syncData.mysql_tables || [];
+            const postgresTables = syncData.postgres_tables || [];
+            const mysqlCounts = syncData.mysql_counts || {};
+            const postgresCounts = syncData.postgres_counts || {};
+            
+            // Create a set of all table names
+            const allTableNames = new Set();
+            mysqlTables.forEach(table => allTableNames.add(table.name));
+            postgresTables.forEach(table => allTableNames.add(table.name));
+            
+            const sortedTables = Array.from(allTableNames).sort();
+            console.log(`Found ${sortedTables.length} unique tables`);
+            
+            let html = '';
+            let syncedTables = 0;
+            let totalTablesWithData = 0;
+            
+            sortedTables.forEach(tableName => {
+                const mysqlCount = mysqlCounts[tableName] || 0;
+                const postgresCount = postgresCounts[tableName] || 0;
+                
+                // Skip tables that don't exist in MySQL (focus on source data)
+                if (mysqlCount === undefined && !mysqlTables.find(t => t.name === tableName)) {
+                    return;
+                }
+                
+                const isSync = mysqlCount === postgresCount;
+                const hasData = mysqlCount > 0 || postgresCount > 0;
+                
+                if (hasData) totalTablesWithData++;
+                if (isSync && hasData) syncedTables++;
+                
+                // Determine status and icon
+                let statusIcon, statusText, statusClass;
+                if (mysqlCount === "ERROR" || postgresCount === "ERROR") {
+                    statusIcon = '<i class="fas fa-exclamation-circle text-danger"></i>';
+                    statusText = 'Error';
+                    statusClass = 'table-danger';
+                } else if (mysqlCount === 0 && postgresCount === 0) {
+                    statusIcon = '<i class="fas fa-minus-circle text-muted"></i>';
+                    statusText = 'Empty';
+                    statusClass = 'table-secondary';
+                } else if (isSync) {
+                    statusIcon = '<i class="fas fa-check-circle text-success"></i>';
+                    statusText = 'Synced';
+                    statusClass = 'table-success';
+                } else {
+                    statusIcon = '<i class="fas fa-exclamation-triangle text-warning"></i>';
+                    statusText = 'Out of Sync';
+                    statusClass = 'table-warning';
+                }
+                
+                // Format counts
+                const mysqlDisplay = mysqlCount === "ERROR" ? "ERROR" : 
+                                   typeof mysqlCount === 'number' ? mysqlCount.toLocaleString('en-US') : 
+                                   mysqlCount || '0';
+                const postgresDisplay = postgresCount === "ERROR" ? "ERROR" : 
+                                       typeof postgresCount === 'number' ? postgresCount.toLocaleString('en-US') : 
+                                       postgresCount || '0';
+                
+                html += `
+                    <tr class="${statusClass}">
+                        <td><strong>${tableName}</strong></td>
+                        <td><span class="badge bg-primary">${mysqlDisplay}</span></td>
+                        <td><span class="badge bg-success">${postgresDisplay}</span></td>
+                        <td>${statusIcon} ${statusText}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${tableName}')" title="View latest 5 records">
+                                <i class="fas fa-eye"></i> Latest
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            if (html === '') {
+                html = '<tr><td colspan="5" class="text-center text-muted">No table data available</td></tr>';
+            }
+            
+            tablesStatus.innerHTML = html;
+            
+            // Update progress circle with real data
+            const progress = totalTablesWithData > 0 ? (syncedTables / totalTablesWithData) * 100 : 0;
+            updateProgressCircle(progress);
+            progressDetails.textContent = `${syncedTables} of ${totalTablesWithData} tables synced`;
+            
+            console.log(`✅ Main table updated: ${syncedTables}/${totalTablesWithData} synced (${progress.toFixed(1)}%)`);
+        }
+
+        function addTestUser() {
+            // This would typically make an API call to add test data
+            const timestamp = Date.now();
+            const message = `Test User ${timestamp} added`;
+            showNotification(message, 'info');
+            addEventToLog(message);
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            addEventToLog('Dashboard loaded');
+            
+            // Load real data immediately on startup
+            setTimeout(() => {
+                refreshData();
+            }, 1000);
+            
+            // Also request socket updates as backup
+            setTimeout(() => {
+                socket.emit('requestUpdate');
+            }, 2000);
+        });
+    </script>
+</body>
+</html> 
