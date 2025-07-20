@@ -19,7 +19,7 @@ from database.mysql_client import MySQLClient
 from database.postgres_client import PostgreSQLClient
 from models.validation_models import ValidationResult, TableStats, MigrationStatus
 from services.data_validator import DataValidator
-from services.dynamic_cdc_manager import DynamicCDCManager  # New CDC Manager
+from services.dynamic_table_monitor import DynamicTableMonitor  # New Advanced Monitor
 from services.monitoring import MonitoringService
 from utils.logger import setup_logger
 
@@ -98,7 +98,7 @@ async def startup_event():
         
         # Initialize CDC Manager
         logger.info("🔄 Setting up Dynamic CDC Manager...")
-        cdc_manager = DynamicCDCManager(
+        cdc_manager = DynamicTableMonitor(
             mysql_client=mysql_client,
             postgres_client=postgres_client,
             redis_client=redis_client,
@@ -179,26 +179,19 @@ def start_background_tasks():
     """Start background monitoring and Debezium CDC processing tasks"""
     
     def run_cdc_manager():
-        """Run CDC Manager in background thread"""
+        """Run Dynamic Table Monitor in background thread"""
         try:
-            logger.info("🔄 Starting Dynamic CDC Manager thread...")
+            logger.info("🔄 Starting Dynamic Table Monitor thread...")
             if cdc_manager is None:
                 logger.error("❌ cdc_manager is None!")
                 return
             
-            # Setup connectors first
-            logger.info("🔧 Setting up dynamic connectors...")
-            connector_setup_success = cdc_manager.setup_dynamic_connectors()
-            
-            if connector_setup_success:
-                # Start CDC monitoring
-                logger.info("🚀 Starting CDC monitoring...")
-                cdc_manager.start_cdc_monitoring()
-            else:
-                logger.warning("⚠️ Connector setup failed, CDC monitoring will be limited")
+            # Start comprehensive monitoring (this handles everything)
+            logger.info("🚀 Starting comprehensive table monitoring...")
+            cdc_manager.start_monitoring()
                 
         except Exception as e:
-            logger.error(f"💥 CDC Manager thread error: {str(e)}")
+            logger.error(f"💥 Dynamic Table Monitor thread error: {str(e)}")
             import traceback
             logger.error(f"📜 Full traceback: {traceback.format_exc()}")
     
@@ -363,39 +356,10 @@ async def get_debezium_status():
 
 @app.post("/cdc/setup-dynamic")
 async def setup_dynamic_cdc():
-    """Setup dynamic CDC connectors for all discovered tables"""
+    """Setup dynamic CDC connectors for all discovered tables - LEGACY ENDPOINT"""
     try:
-        if not cdc_manager:
-            raise HTTPException(status_code=503, detail="CDC Manager not initialized")
-        
-        logger.info("🔧 Setting up dynamic CDC connectors via API request...")
-        
-        # Setup connectors
-        success = cdc_manager.setup_dynamic_connectors()
-        
-        if success:
-            # Start monitoring if not already running
-            if not cdc_manager.running:
-                cdc_manager.start_cdc_monitoring()
-            
-            # Get status
-            cdc_status = cdc_manager.get_cdc_status()
-            
-            return {
-                "message": "Dynamic CDC connectors setup completed successfully",
-                "success": True,
-                "monitored_tables": cdc_status.get("monitored_tables", []),
-                "total_tables": cdc_status.get("total_tables", 0),
-                "connector_status": global_stats["connector_status"],
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "message": "CDC connector setup failed",
-                "success": False,
-                "error": "Failed to create connectors",
-                "timestamp": datetime.now().isoformat()
-            }
+        # Redirect to new table monitor endpoint
+        return await setup_dynamic_table_monitor()
         
     except Exception as e:
         logger.error(f"Failed to setup dynamic CDC: {str(e)}")
@@ -403,15 +367,10 @@ async def setup_dynamic_cdc():
 
 @app.get("/cdc/status")
 async def get_cdc_status():
-    """Get comprehensive CDC status"""
+    """Get comprehensive CDC status - LEGACY ENDPOINT"""
     try:
-        if not cdc_manager:
-            return {
-                "error": "CDC Manager not initialized",
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        return cdc_manager.get_cdc_status()
+        # Redirect to new table monitor status
+        return await get_table_monitor_status()
         
     except Exception as e:
         logger.error(f"Failed to get CDC status: {str(e)}")
@@ -818,7 +777,7 @@ async def get_kafka_status():
         # Get CDC status from manager
         cdc_status = {}
         if cdc_manager:
-            cdc_status = cdc_manager.get_cdc_status()
+            cdc_status = cdc_manager.get_monitoring_status()  # Updated method name
         
         return {
             "timestamp": datetime.now().isoformat(),
@@ -829,7 +788,7 @@ async def get_kafka_status():
             "monitored_tables": global_stats.get("monitored_tables", []),
             "recent_events": recent_events,
             "success_rate": 1.0 if global_stats["cdc_events_processed"] > 0 else 0.0,
-            "cdc_manager_status": cdc_status
+            "table_monitor_status": cdc_status  # Updated field name
         }
         
     except Exception as e:
@@ -880,6 +839,117 @@ async def test_cdc_simulation():
         
     except Exception as e:
         logger.error(f"Failed to simulate CDC event: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/table-monitor/setup")
+async def setup_dynamic_table_monitor():
+    """Setup and start dynamic table monitoring system"""
+    try:
+        if not cdc_manager:
+            raise HTTPException(status_code=503, detail="Table Monitor not initialized")
+        
+        logger.info("🔧 Setting up Dynamic Table Monitor via API request...")
+        
+        # Start monitoring (this will discover tables and setup connectors automatically)
+        cdc_manager.start_monitoring()
+        
+        # Get status
+        monitor_status = cdc_manager.get_monitoring_status()
+        
+        return {
+            "message": "Dynamic Table Monitor started successfully",
+            "success": True,
+            "monitoring_status": monitor_status,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to setup table monitor: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/table-monitor/status")
+async def get_table_monitor_status():
+    """Get comprehensive table monitoring status"""
+    try:
+        if not cdc_manager:
+            return {
+                "error": "Table Monitor not initialized",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        return cdc_manager.get_monitoring_status()
+        
+    except Exception as e:
+        logger.error(f"Failed to get table monitor status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/table-monitor/add-table/{table_name}")
+async def add_table_to_monitoring(table_name: str):
+    """Manually add a table to monitoring"""
+    try:
+        if not cdc_manager:
+            raise HTTPException(status_code=503, detail="Table Monitor not initialized")
+        
+        success = cdc_manager.add_table_manually(table_name)
+        
+        if success:
+            return {
+                "message": f"Table '{table_name}' added to monitoring successfully",
+                "success": True,
+                "table_name": table_name,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "message": f"Failed to add table '{table_name}' to monitoring",
+                "success": False,
+                "table_name": table_name,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+    except Exception as e:
+        logger.error(f"Failed to add table {table_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/discover-tables")
+async def discover_tables():
+    """Manually trigger table discovery"""
+    try:
+        mysql_tables = mysql_client.get_table_list() if mysql_client else []
+        postgres_tables = postgres_client.get_table_list() if postgres_client else []
+        
+        # Filter tables like the monitor would
+        excluded_patterns = [
+            'information_schema', 'performance_schema', 'mysql', 'sys',
+            'migration_log', 'schema_migrations', 'flyway_schema_history'
+        ]
+        
+        def should_monitor(table_name):
+            table_lower = table_name.lower()
+            for pattern in excluded_patterns:
+                if pattern in table_lower:
+                    return False
+            if table_name.startswith('_') or table_name.startswith('tmp_'):
+                return False
+            if '_backup' in table_lower or '_bak' in table_lower:
+                return False
+            return True
+        
+        monitorable_mysql = [t for t in mysql_tables if should_monitor(t)]
+        
+        return {
+            "mysql_tables": {
+                "all": mysql_tables,
+                "monitorable": monitorable_mysql,
+                "excluded": [t for t in mysql_tables if not should_monitor(t)]
+            },
+            "postgres_tables": postgres_tables,
+            "current_monitoring": global_stats.get("monitored_tables", []),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to discover tables: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

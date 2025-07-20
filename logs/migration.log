@@ -2732,3 +2732,132 @@
 {"asctime": "2025-07-20 06:50:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
 {"asctime": "2025-07-20 06:55:59", "name": "main", "levelname": "INFO", "message": "Validation check completed: [ValidationResult(table_name='users', mysql_count=11, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 575922), quick_check=True, discrepancies=['Row count mismatch: MySQL=11, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='products', mysql_count=5, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 602826), quick_check=True, discrepancies=['Row count mismatch: MySQL=5, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='orders', mysql_count=3, postgres_count=3, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 615542), quick_check=True, discrepancies=[]), ValidationResult(table_name='order_items', mysql_count=5, postgres_count=5, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 624738), quick_check=True, discrepancies=[])]"}
 {"asctime": "2025-07-20 06:55:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 07:00:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting MySQL to PostgreSQL Migration System with Dynamic CDC"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udce1 Connecting to databases..."}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udd34 Connecting to Redis..."}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "MySQL Connection: \u2705"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "PostgreSQL Connection: \u2705"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Setting up Dynamic CDC Manager..."}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Starting Dynamic Table Monitor thread..."}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting comprehensive table monitoring..."}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Background tasks started successfully"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\u2705 All services initialized successfully!"}
+{"asctime": "2025-07-20 07:04:49", "name": "main", "levelname": "INFO", "message": "\ud83c\udfaf Dynamic CDC Migration System is ready!"}
+{"asctime": "2025-07-20 07:04:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:05:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:05:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:06:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:06:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:07:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:07:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:08:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:08:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:09:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:09:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 5 tables: ['order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:09:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:10:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:10:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:11:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:11:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:12:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:12:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:13:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:13:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:14:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:14:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 5 tables: ['order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:14:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:15:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:15:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:16:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:16:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:17:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:17:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:18:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:18:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:19:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:19:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 5 tables: ['order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:19:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:20:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:20:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:21:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:21:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:22:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:22:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:23:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:23:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:24:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:24:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 5 tables: ['order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:24:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:25:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:25:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:26:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:26:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:27:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:27:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:28:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:28:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:29:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:29:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 5 tables: ['order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:29:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:30:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:30:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:31:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:31:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:32:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:32:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:33:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:33:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:34:20", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:34:49", "name": "main", "levelname": "INFO", "message": "Validation check completed: [ValidationResult(table_name='users', mysql_count=11, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 7, 34, 49, 733298), quick_check=True, discrepancies=['Row count mismatch: MySQL=11, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='products', mysql_count=5, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 7, 34, 49, 771596), quick_check=True, discrepancies=['Row count mismatch: MySQL=5, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='orders', mysql_count=3, postgres_count=3, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 7, 34, 49, 778863), quick_check=True, discrepancies=[]), ValidationResult(table_name='order_items', mysql_count=5, postgres_count=5, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 7, 34, 49, 783331), quick_check=True, discrepancies=[])]"}
+{"asctime": "2025-07-20 07:34:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 5 tables: ['order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:34:50", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:35:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:35:20", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 07:35:20", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 1"}
+{"asctime": "2025-07-20 07:35:21", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:35:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:36:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:36:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:37:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:37:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:38:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:38:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:39:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:39:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:39:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:40:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:40:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:41:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:41:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:42:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:42:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:43:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:43:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:44:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:44:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:44:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:45:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:45:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:46:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:46:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:47:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:47:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:48:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:48:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:49:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:49:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:49:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:50:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:50:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:51:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:51:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:52:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:52:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:53:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:53:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:54:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:54:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
+{"asctime": "2025-07-20 07:54:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
