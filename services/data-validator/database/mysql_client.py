@@ -12,7 +12,7 @@ class MySQLClient:
     def __init__(self):
         self.host = os.getenv('MYSQL_HOST', 'mysql')
         self.user = os.getenv('MYSQL_USER', 'debezium')
-        self.password = os.getenv('MYSQL_PASSWORD', 'debezium')  # Changed from 'dbz' to 'debezium'
+        self.password = os.getenv('MYSQL_PASSWORD', 'dbz')
         self.database = os.getenv('MYSQL_DATABASE', 'inventory')
         self.port = int(os.getenv('MYSQL_PORT', '3306'))
         

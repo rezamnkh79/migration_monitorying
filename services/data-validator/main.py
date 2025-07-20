@@ -499,12 +499,19 @@ async def get_metrics():
         mysql_table_counts = {}
         postgres_table_counts = {}
         
+        # Get MySQL table counts
         for table in monitored_tables:
             mysql_table_counts[table] = await get_table_count(mysql_client, table)
         
-        for table in postgres_tables:
-            if table in monitored_tables:
-                postgres_table_counts[table] = await get_table_count(postgres_client, table)
+        # Get PostgreSQL table counts for all tables (not just MySQL ones)
+        # Filter PostgreSQL tables the same way as MySQL
+        postgres_filtered_tables = [
+            table for table in postgres_tables 
+            if table not in excluded_tables and not table.startswith('_')
+        ]
+        
+        for table in postgres_filtered_tables:
+            postgres_table_counts[table] = await get_table_count(postgres_client, table)
         
         # Get sync stats from Redis (daily stats)
         today = datetime.now().strftime('%Y%m%d')
@@ -596,8 +603,13 @@ async def manual_sync_check():
         
         # Get MySQL data
         if mysql_client:
-            mysql_tables = mysql_client.get_table_list()[:15]
-            for table_name in mysql_tables:
+            # Use data validator tables if available, otherwise get all tables
+            if data_validator:
+                mysql_table_list = data_validator.tables_to_sync
+            else:
+                mysql_table_list = mysql_client.get_table_list()[:15]  # Fallback with limit
+                
+            for table_name in mysql_table_list:
                 try:
                     count = await get_table_count(mysql_client, table_name)
                     sample_data = mysql_client.execute_query(f"SELECT * FROM `{table_name}` LIMIT 3")
@@ -615,8 +627,20 @@ async def manual_sync_check():
         
         # Get PostgreSQL data
         if postgres_client:
-            postgres_tables = postgres_client.get_table_list()
-            for table_name in postgres_tables:
+            postgres_table_list = postgres_client.get_table_list()
+            
+            # Filter PostgreSQL tables the same way as MySQL
+            excluded_tables = [
+                'migration_log', 'schema_migrations', 'flyway_schema_history',
+                'information_schema', 'performance_schema', 'mysql', 'sys'
+            ]
+            
+            postgres_filtered_tables = [
+                table for table in postgres_table_list 
+                if table not in excluded_tables and not table.startswith('_')
+            ]
+            
+            for table_name in postgres_filtered_tables:
                 try:
                     count = await get_table_count(postgres_client, table_name)
                     sample_data = postgres_client.execute_query(f'SELECT * FROM "{table_name}" LIMIT 3')
@@ -974,87 +998,6 @@ async def discover_tables():
         
     except Exception as e:
         logger.error(f"Failed to discover tables: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/discovered-tables")
-async def get_discovered_tables():
-    """Get dynamically discovered tables from both MySQL and PostgreSQL"""
-    try:
-        if not mysql_client or not postgres_client or not data_validator:
-            raise HTTPException(status_code=503, detail="Database connections not available")
-        
-        # Get tables from both databases
-        mysql_tables = mysql_client.get_table_list()
-        postgres_tables = postgres_client.get_table_list()
-        
-        # Get filtered tables for sync
-        sync_tables = data_validator.get_tables_to_sync()
-        
-        # Get table counts
-        mysql_counts = {}
-        postgres_counts = {}
-        
-        for table in sync_tables:
-            try:
-                mysql_counts[table] = mysql_client.get_table_count(table)
-            except Exception as e:
-                mysql_counts[table] = f"Error: {str(e)}"
-        
-        for table in sync_tables:
-            try:
-                postgres_counts[table] = postgres_client.get_table_count(table)
-            except Exception as e:
-                postgres_counts[table] = f"Error: {str(e)}"
-        
-        return {
-            "discovery_info": {
-                "mysql_total_tables": len(mysql_tables),
-                "postgres_total_tables": len(postgres_tables), 
-                "sync_candidate_tables": len(sync_tables),
-                "last_discovery": data_validator._last_table_discovery.isoformat() if data_validator._last_table_discovery else None
-            },
-            "all_tables": {
-                "mysql": sorted(mysql_tables),
-                "postgres": sorted(postgres_tables)
-            },
-            "sync_tables": {
-                "tables": sync_tables,
-                "mysql_counts": mysql_counts,
-                "postgres_counts": postgres_counts
-            },
-            "table_comparison": {
-                "mysql_only": sorted(list(set(mysql_tables) - set(postgres_tables))),
-                "postgres_only": sorted(list(set(postgres_tables) - set(mysql_tables))),
-                "common": sorted(list(set(mysql_tables) & set(postgres_tables)))
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to get discovered tables: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/refresh-table-discovery")
-async def refresh_table_discovery():
-    """Force refresh of table discovery cache"""
-    try:
-        if not data_validator:
-            raise HTTPException(status_code=503, detail="Data validator not available")
-        
-        # Clear cache to force rediscovery
-        data_validator._last_table_discovery = None
-        
-        # Get fresh table list
-        tables = data_validator.get_tables_to_sync()
-        
-        return {
-            "message": "Table discovery refreshed successfully",
-            "discovered_tables": tables,
-            "count": len(tables),
-            "refresh_time": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to refresh table discovery: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
