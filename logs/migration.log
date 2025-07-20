@@ -2861,3 +2861,54 @@
 {"asctime": "2025-07-20 07:54:19", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
 {"asctime": "2025-07-20 07:54:49", "name": "main", "levelname": "ERROR", "message": "Failed to get Kafka status: 'DynamicTableMonitor' object has no attribute 'get_cdc_status'"}
 {"asctime": "2025-07-20 07:54:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting MySQL to PostgreSQL Migration System with Dynamic CDC"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udce1 Connecting to databases..."}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udd34 Connecting to Redis..."}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "MySQL Connection: \u2705"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "PostgreSQL Connection: \u2705"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Setting up Dynamic CDC Manager..."}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Starting Dynamic Table Monitor thread..."}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting comprehensive table monitoring..."}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Background tasks started successfully"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\u2705 All services initialized successfully!"}
+{"asctime": "2025-07-20 07:55:18", "name": "main", "levelname": "INFO", "message": "\ud83c\udfaf Dynamic CDC Migration System is ready!"}
+{"asctime": "2025-07-20 07:55:38", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 07:55:38", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 0"}
+{"asctime": "2025-07-20 07:55:53", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 07:55:53", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 1"}
+{"asctime": "2025-07-20 07:59:44", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Validation requested for tables: None, full_validation: True"}
+{"asctime": "2025-07-20 07:59:44", "name": "main", "levelname": "INFO", "message": "\u2705 Validation completed: 0/4 tables consistent"}
+{"asctime": "2025-07-20 08:00:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 08:05:18", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting MySQL to PostgreSQL Migration System with Dynamic CDC"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\udce1 Connecting to databases..."}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\udd34 Connecting to Redis..."}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "MySQL Connection: \u2705"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "PostgreSQL Connection: \u2705"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Setting up Dynamic CDC Manager..."}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Starting Dynamic Table Monitor thread..."}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting comprehensive table monitoring..."}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Background tasks started successfully"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\u2705 All services initialized successfully!"}
+{"asctime": "2025-07-20 08:09:50", "name": "main", "levelname": "INFO", "message": "\ud83c\udfaf Dynamic CDC Migration System is ready!"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting MySQL to PostgreSQL Migration System with Dynamic CDC"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\udce1 Connecting to databases..."}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\udd34 Connecting to Redis..."}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "MySQL Connection: \u2705"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "PostgreSQL Connection: \u2705"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Setting up Dynamic CDC Manager..."}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Starting Dynamic Table Monitor thread..."}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting comprehensive table monitoring..."}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Background tasks started successfully"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\u2705 All services initialized successfully!"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83c\udfaf Dynamic CDC Migration System is ready!"}
+{"asctime": "2025-07-20 08:15:06", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 6 tables: ['new_table', 'order_items', 'orders', 'products', 'test_dynamic_table', 'users']"}
+{"asctime": "2025-07-20 08:17:50", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 08:17:50", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 1"}
+{"asctime": "2025-07-20 08:18:10", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 08:18:10", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 1"}

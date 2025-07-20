@@ -238,34 +238,47 @@ def start_background_tasks():
     logger.info("🚀 Background tasks started successfully")
 
 def update_connector_status():
-    """Check and update Debezium connector status"""
+    """Check and update Dynamic Table Monitor connector status"""
     try:
         import requests
         
-        # Check MySQL source connector for inventory
+        # Check Dynamic MySQL source connector
         try:
-            response = requests.get("http://connect:8083/connectors/mysql-source-connector-inventory/status", timeout=5)
+            response = requests.get("http://connect:8083/connectors/dynamic-mysql-source/status", timeout=5)
             if response.status_code == 200:
                 status = response.json()
-                global_stats["connector_status"]["mysql"] = status.get("connector", {}).get("state", "unknown")
+                connector_state = status.get("connector", {}).get("state", "unknown")
+                global_stats["connector_status"]["mysql"] = connector_state
+                
+                # Also check task status
+                tasks = status.get("tasks", [])
+                if tasks:
+                    task_state = tasks[0].get("state", "unknown")
+                    if task_state == "FAILED":
+                        global_stats["connector_status"]["mysql"] = "failed"
+                
+                logger.debug(f"🔧 MySQL Connector Status: {connector_state}")
             else:
                 global_stats["connector_status"]["mysql"] = "disconnected"
-        except:
+        except Exception as e:
+            logger.debug(f"MySQL connector check failed: {str(e)}")
             global_stats["connector_status"]["mysql"] = "disconnected"
         
-        # Check PostgreSQL sink connector for inventory
+        # For PostgreSQL, we're only using source connector (no sink needed for monitoring)
+        # Set postgres status based on database connection
         try:
-            response = requests.get("http://connect:8083/connectors/postgres-sink-final/status", timeout=5)
-            if response.status_code == 200:
-                status = response.json()
-                global_stats["connector_status"]["postgres"] = status.get("connector", {}).get("state", "unknown")
+            if postgres_client and postgres_client.test_connection():
+                global_stats["connector_status"]["postgres"] = "connected"
             else:
                 global_stats["connector_status"]["postgres"] = "disconnected"
-        except:
+        except Exception as e:
+            logger.debug(f"PostgreSQL status check failed: {str(e)}")
             global_stats["connector_status"]["postgres"] = "disconnected"
             
     except Exception as e:
         logger.warning(f"Failed to update connector status: {str(e)}")
+        global_stats["connector_status"]["mysql"] = "unknown"
+        global_stats["connector_status"]["postgres"] = "unknown"
 
 async def run_validation_check():
     """Run incremental validation check"""
@@ -325,13 +338,13 @@ async def health_check():
 
 @app.get("/debezium/status")
 async def get_debezium_status():
-    """Get detailed Debezium connector status"""
+    """Get detailed Dynamic Table Monitor connector status"""
     try:
         import requests
         
         connectors = {}
         
-        # Get connector list
+        # Get current active connectors
         try:
             response = requests.get("http://connect:8083/connectors", timeout=5)
             if response.status_code == 200:
@@ -344,9 +357,20 @@ async def get_debezium_status():
         except Exception as e:
             logger.error(f"Failed to get connector status: {str(e)}")
         
+        # Get table monitor status
+        table_monitor_status = {}
+        if cdc_manager:
+            table_monitor_status = cdc_manager.get_monitoring_status()
+        
         return {
-            "connectors": connectors,
-            "cdc_stats": global_stats,
+            "active_connectors": connectors,
+            "table_monitor_status": table_monitor_status,
+            "global_stats": global_stats,
+            "system_info": {
+                "using_dynamic_monitoring": True,
+                "discovery_interval": "30 seconds",
+                "monitored_tables": global_stats.get("monitored_tables", [])
+            },
             "timestamp": datetime.now().isoformat()
         }
         

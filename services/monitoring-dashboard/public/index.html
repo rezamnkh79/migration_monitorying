@@ -871,13 +871,16 @@
             element.className = 'badge';
             if (cleanStatus === 'running' || cleanStatus === 'connected') {
                 element.className += ' bg-success';
-                element.textContent = 'Running';
+                element.textContent = 'Connected';
             } else if (cleanStatus === 'paused') {
                 element.className += ' bg-warning';
                 element.textContent = 'Paused';
             } else if (cleanStatus === 'failed' || cleanStatus === 'error') {
                 element.className += ' bg-danger';
                 element.textContent = 'Failed';
+            } else if (cleanStatus === 'disconnected') {
+                element.className += ' bg-warning';
+                element.textContent = 'Disconnected';
             } else {
                 element.className += ' bg-secondary';
                 element.textContent = 'Unknown';
