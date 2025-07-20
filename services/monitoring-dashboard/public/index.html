@@ -150,27 +150,25 @@
                         <!-- CDC Status Display -->
                         <div id="cdcStatusResult" class="mb-3">
                             <div class="row">
-                                <!-- CDC Events counter hidden - not working properly
                                 <div class="col-md-3">
                                     <div class="text-center p-2 bg-light rounded">
                                         <h5 class="text-primary" id="cdcEventsCount">0</h5>
                                         <small>CDC Events Processed</small>
                                     </div>
                                 </div>
-                                -->
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="text-center p-2 bg-light rounded">
                                         <span class="badge bg-secondary" id="mysqlConnectorStatus">Unknown</span>
                                         <br><small>MySQL Connector</small>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="text-center p-2 bg-light rounded">
                                         <span class="badge bg-secondary" id="postgresConnectorStatus">Unknown</span>
                                         <br><small>PostgreSQL Connector</small>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="text-center p-2 bg-light rounded">
                                         <small class="text-muted" id="lastCdcEvent">No events yet</small>
                                         <br><small>Last CDC Event</small>
@@ -838,9 +836,9 @@
         // Update CDC Status Display
         function updateCDCStatus(cdcStats) {
             try {
-                // CDC events count update commented out - not working properly
-                // document.getElementById('cdcEventsCount').textContent = 
-                //     (cdcStats.events_processed || 0).toLocaleString('en-US');
+                // Update CDC events count
+                document.getElementById('cdcEventsCount').textContent = 
+                    (cdcStats.events_processed || 0).toLocaleString('en-US');
                 
                 // Update connector statuses
                 const mysqlStatus = cdcStats.connector_status?.mysql || cdcStats.connectors?.mysql || 'unknown';

@@ -2697,3 +2697,38 @@
 {"asctime": "2025-07-20 06:03:02", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized sync status for 4 tables"}
 {"asctime": "2025-07-20 06:08:02", "name": "main", "levelname": "INFO", "message": "Validation check completed: [ValidationResult(table_name='users', mysql_count=10, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 6, 8, 2, 493702), quick_check=True, discrepancies=['Row count mismatch: MySQL=10, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='products', mysql_count=5, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 6, 8, 2, 507908), quick_check=True, discrepancies=['Row count mismatch: MySQL=5, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='orders', mysql_count=3, postgres_count=3, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 6, 8, 2, 513878), quick_check=True, discrepancies=[]), ValidationResult(table_name='order_items', mysql_count=5, postgres_count=5, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 6, 8, 2, 518589), quick_check=True, discrepancies=[])]"}
 {"asctime": "2025-07-20 06:08:02", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized sync status for 4 tables"}
+{"asctime": "2025-07-20 06:13:02", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized sync status for 4 tables"}
+{"asctime": "2025-07-20 06:18:02", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized sync status for 4 tables"}
+{"asctime": "2025-07-20 06:23:02", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized sync status for 4 tables"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting MySQL to PostgreSQL Migration System with Dynamic CDC"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udce1 Connecting to databases..."}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udd34 Connecting to Redis..."}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "MySQL Connection: \u2705"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "PostgreSQL Connection: \u2705"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Setting up Dynamic CDC Manager..."}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udd04 Starting Dynamic CDC Manager thread..."}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udd27 Setting up dynamic connectors..."}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Background tasks started successfully"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\u2705 All services initialized successfully!"}
+{"asctime": "2025-07-20 06:25:59", "name": "main", "levelname": "INFO", "message": "\ud83c\udfaf Dynamic CDC Migration System is ready!"}
+{"asctime": "2025-07-20 06:26:21", "name": "main", "levelname": "INFO", "message": "\ud83d\ude80 Starting CDC monitoring..."}
+{"asctime": "2025-07-20 06:27:08", "name": "main", "levelname": "INFO", "message": "\ud83d\udd27 Setting up dynamic CDC connectors via API request..."}
+{"asctime": "2025-07-20 06:30:39", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 06:30:39", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 3"}
+{"asctime": "2025-07-20 06:30:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 06:31:31", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 06:31:31", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 3"}
+{"asctime": "2025-07-20 06:35:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 06:36:49", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 06:36:49", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 4"}
+{"asctime": "2025-07-20 06:37:00", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Manual sync check requested with CDC status"}
+{"asctime": "2025-07-20 06:37:00", "name": "main", "levelname": "INFO", "message": "\u2705 Sync check completed: 2 synced, 2 different, CDC events: 4"}
+{"asctime": "2025-07-20 06:37:30", "name": "main", "levelname": "INFO", "message": "\ud83d\udd0d Validation requested for tables: None, full_validation: True"}
+{"asctime": "2025-07-20 06:37:30", "name": "main", "levelname": "INFO", "message": "\u2705 Validation completed: 0/4 tables consistent"}
+{"asctime": "2025-07-20 06:40:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 06:45:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 06:50:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}
+{"asctime": "2025-07-20 06:55:59", "name": "main", "levelname": "INFO", "message": "Validation check completed: [ValidationResult(table_name='users', mysql_count=11, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 575922), quick_check=True, discrepancies=['Row count mismatch: MySQL=11, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='products', mysql_count=5, postgres_count=4, is_consistent=False, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 602826), quick_check=True, discrepancies=['Row count mismatch: MySQL=5, PostgreSQL=4', 'Latest records count mismatch']), ValidationResult(table_name='orders', mysql_count=3, postgres_count=3, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 615542), quick_check=True, discrepancies=[]), ValidationResult(table_name='order_items', mysql_count=5, postgres_count=5, is_consistent=True, validation_time=datetime.datetime(2025, 7, 20, 6, 55, 59, 624738), quick_check=True, discrepancies=[])]"}
+{"asctime": "2025-07-20 06:55:59", "name": "main", "levelname": "INFO", "message": "\ud83d\udcca Initialized dynamic sync status for 4 tables: ['order_items', 'orders', 'products', 'users']"}

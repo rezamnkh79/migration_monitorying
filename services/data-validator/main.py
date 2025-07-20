@@ -19,7 +19,7 @@ from database.mysql_client import MySQLClient
 from database.postgres_client import PostgreSQLClient
 from models.validation_models import ValidationResult, TableStats, MigrationStatus
 from services.data_validator import DataValidator
-from services.kafka_consumer import DebeziumKafkaConsumer
+from services.dynamic_cdc_manager import DynamicCDCManager  # New CDC Manager
 from services.monitoring import MonitoringService
 from utils.logger import setup_logger
 
@@ -27,9 +27,9 @@ from utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 app = FastAPI(
-    title="MySQL to PostgreSQL Migration Validator with Debezium CDC",
-    description="Real-time data validation and monitoring for MySQL to PostgreSQL migration using Debezium CDC",
-    version="2.0.0"
+    title="MySQL to PostgreSQL Migration Validator with Dynamic CDC",
+    description="Real-time data validation and monitoring for MySQL to PostgreSQL migration using Dynamic Debezium CDC",
+    version="3.0.0"
 )
 
 # CORS middleware
@@ -46,16 +46,17 @@ mysql_client = None
 postgres_client = None
 redis_client = None
 data_validator = None
-kafka_consumer = None
+cdc_manager = None  # New CDC Manager
 monitoring_service = None
 
-# Global stats for dashboard (CDC counters disabled)
+# Global stats for dashboard
 global_stats = {
-    "cdc_events_processed": 0,  # Keep for compatibility but hide in frontend
-    "last_cdc_event": None,     # Keep for compatibility but hide in frontend
+    "cdc_events_processed": 0,
+    "last_cdc_event": None,
     "connector_status": {"mysql": "disconnected", "postgres": "disconnected"},
-    "sync_stats": {"insert": 0, "update": 0, "delete": 0},  # Keep for compatibility but hide in frontend
-    "table_sync_status": {}
+    "sync_stats": {"insert": 0, "update": 0, "delete": 0},
+    "table_sync_status": {},
+    "monitored_tables": []  # Dynamic table list
 }
 
 class ValidationRequest(BaseModel):
@@ -70,9 +71,9 @@ class TableSyncRequest(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize all services with Debezium CDC support"""
-    global mysql_client, postgres_client, redis_client, data_validator, kafka_consumer, monitoring_service
+    global mysql_client, postgres_client, redis_client, data_validator, cdc_manager, monitoring_service
     
-    logger.info("🚀 Starting MySQL to PostgreSQL Migration System with Debezium CDC")
+    logger.info("🚀 Starting MySQL to PostgreSQL Migration System with Dynamic CDC")
     
     try:
         # Initialize database clients
@@ -95,19 +96,19 @@ async def startup_event():
         data_validator = DataValidator(mysql_client, postgres_client, redis_client)
         monitoring_service = MonitoringService(redis_client, mysql_client, postgres_client)
         
-        # Initialize Debezium Kafka consumer for CDC events
-        logger.info("🔄 Setting up Debezium CDC Consumer...")
-        kafka_consumer = DebeziumKafkaConsumer(
-            bootstrap_servers=['kafka:29092'],
-            data_validator=data_validator,
-            monitoring_service=monitoring_service,
+        # Initialize CDC Manager
+        logger.info("🔄 Setting up Dynamic CDC Manager...")
+        cdc_manager = DynamicCDCManager(
+            mysql_client=mysql_client,
+            postgres_client=postgres_client,
+            redis_client=redis_client,
             global_stats=global_stats
         )
         
         # Set global variables
         globals()['data_validator'] = data_validator
         globals()['monitoring_service'] = monitoring_service
-        globals()['kafka_consumer'] = kafka_consumer
+        globals()['cdc_manager'] = cdc_manager
         
         # Start background tasks
         start_background_tasks()
@@ -116,7 +117,7 @@ async def startup_event():
         await initialize_table_sync_status()
         
         logger.info("✅ All services initialized successfully!")
-        logger.info("🎯 Debezium CDC Migration System is ready!")
+        logger.info("🎯 Dynamic CDC Migration System is ready!")
         
     except Exception as e:
         logger.error(f"❌ Failed to initialize services: {str(e)}")
@@ -124,12 +125,28 @@ async def startup_event():
         logger.warning("⚠️ Running in limited mode due to initialization errors")
 
 async def initialize_table_sync_status():
-    """Initialize table sync status tracking"""
+    """Initialize table sync status tracking with dynamic tables"""
     try:
+        # Get dynamic table list from MySQL
         mysql_tables = mysql_client.get_table_list() if mysql_client else []
         postgres_tables = postgres_client.get_table_list() if postgres_client else []
         
-        for table in mysql_tables[:10]:  # Monitor first 10 tables
+        # Filter out system tables
+        excluded_tables = [
+            'migration_log', 'schema_migrations', 'flyway_schema_history',
+            'information_schema', 'performance_schema', 'mysql', 'sys'
+        ]
+        
+        monitored_tables = [
+            table for table in mysql_tables 
+            if table not in excluded_tables and not table.startswith('_')
+        ]
+        
+        # Update global stats with monitored tables
+        global_stats["monitored_tables"] = monitored_tables
+        
+        # Initialize sync status for each table
+        for table in monitored_tables:
             mysql_count = await get_table_count(mysql_client, table) if mysql_client else 0
             postgres_count = await get_table_count(postgres_client, table) if postgres_client else 0
             
@@ -140,7 +157,7 @@ async def initialize_table_sync_status():
                 "sync_percentage": (postgres_count / mysql_count * 100) if mysql_count > 0 else 0
             }
         
-        logger.info(f"📊 Initialized sync status for {len(global_stats['table_sync_status'])} tables")
+        logger.info(f"📊 Initialized dynamic sync status for {len(global_stats['table_sync_status'])} tables: {monitored_tables}")
         
     except Exception as e:
         logger.error(f"Failed to initialize table sync status: {str(e)}")
@@ -161,17 +178,27 @@ async def get_table_count(client, table_name):
 def start_background_tasks():
     """Start background monitoring and Debezium CDC processing tasks"""
     
-    def run_kafka_consumer():
-        """Run Debezium Kafka consumer in background thread"""
+    def run_cdc_manager():
+        """Run CDC Manager in background thread"""
         try:
-            logger.info("🔄 Starting Debezium CDC Consumer thread...")
-            if kafka_consumer is None:
-                logger.error("❌ kafka_consumer is None!")
+            logger.info("🔄 Starting Dynamic CDC Manager thread...")
+            if cdc_manager is None:
+                logger.error("❌ cdc_manager is None!")
                 return
-            logger.info("✅ kafka_consumer object exists, starting consumption...")
-            kafka_consumer.start_consuming()
+            
+            # Setup connectors first
+            logger.info("🔧 Setting up dynamic connectors...")
+            connector_setup_success = cdc_manager.setup_dynamic_connectors()
+            
+            if connector_setup_success:
+                # Start CDC monitoring
+                logger.info("🚀 Starting CDC monitoring...")
+                cdc_manager.start_cdc_monitoring()
+            else:
+                logger.warning("⚠️ Connector setup failed, CDC monitoring will be limited")
+                
         except Exception as e:
-            logger.error(f"💥 Kafka consumer thread error: {str(e)}")
+            logger.error(f"💥 CDC Manager thread error: {str(e)}")
             import traceback
             logger.error(f"📜 Full traceback: {traceback.format_exc()}")
     
@@ -210,7 +237,7 @@ def start_background_tasks():
                 time.sleep(600)
     
     # Start background threads
-    threading.Thread(target=run_kafka_consumer, daemon=True).start()
+    threading.Thread(target=run_cdc_manager, daemon=True).start()
     threading.Thread(target=run_periodic_validation, daemon=True).start()
     threading.Thread(target=run_monitoring, daemon=True).start()
     threading.Thread(target=update_table_sync_status, daemon=True).start()
@@ -268,9 +295,9 @@ async def run_full_validation():
 @app.get("/")
 async def root():
     return {
-        "message": "MySQL to PostgreSQL Migration Validator with Debezium CDC",
+        "message": "MySQL to PostgreSQL Migration Validator with Dynamic CDC",
         "status": "running",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "cdc_events_processed": global_stats["cdc_events_processed"],
         "timestamp": datetime.now().isoformat()
     }
@@ -334,58 +361,60 @@ async def get_debezium_status():
         logger.error(f"Failed to get Debezium status: {str(e)}")
         return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
-@app.post("/debezium/setup")
-async def setup_debezium_connectors():
-    """Setup Debezium MySQL source and PostgreSQL sink connectors"""
+@app.post("/cdc/setup-dynamic")
+async def setup_dynamic_cdc():
+    """Setup dynamic CDC connectors for all discovered tables"""
     try:
-        import requests
+        if not cdc_manager:
+            raise HTTPException(status_code=503, detail="CDC Manager not initialized")
         
-        results = {}
+        logger.info("🔧 Setting up dynamic CDC connectors via API request...")
         
-        # Setup MySQL source connector
-        with open('debezium/mysql-source-connector.json', 'r') as f:
-            mysql_config = json.load(f)
+        # Setup connectors
+        success = cdc_manager.setup_dynamic_connectors()
         
-        response = requests.post(
-            "http://connect:8083/connectors",
-            headers={"Content-Type": "application/json"},
-            json=mysql_config,
-            timeout=30
-        )
-        
-        if response.status_code in [200, 201]:
-            results["mysql_source"] = "created"
-            logger.info("✅ MySQL source connector created successfully")
+        if success:
+            # Start monitoring if not already running
+            if not cdc_manager.running:
+                cdc_manager.start_cdc_monitoring()
+            
+            # Get status
+            cdc_status = cdc_manager.get_cdc_status()
+            
+            return {
+                "message": "Dynamic CDC connectors setup completed successfully",
+                "success": True,
+                "monitored_tables": cdc_status.get("monitored_tables", []),
+                "total_tables": cdc_status.get("total_tables", 0),
+                "connector_status": global_stats["connector_status"],
+                "timestamp": datetime.now().isoformat()
+            }
         else:
-            results["mysql_source"] = f"error: {response.text}"
-            logger.error(f"Failed to create MySQL source connector: {response.text}")
-        
-        # Setup PostgreSQL sink connector
-        with open('debezium/postgres-sink-connector.json', 'r') as f:
-            postgres_config = json.load(f)
-        
-        response = requests.post(
-            "http://connect:8083/connectors",
-            headers={"Content-Type": "application/json"},
-            json=postgres_config,
-            timeout=30
-        )
-        
-        if response.status_code in [200, 201]:
-            results["postgres_sink"] = "created"
-            logger.info("✅ PostgreSQL sink connector created successfully")
-        else:
-            results["postgres_sink"] = f"error: {response.text}"
-            logger.error(f"Failed to create PostgreSQL sink connector: {response.text}")
-        
-        return {
-            "message": "Debezium connectors setup completed",
-            "results": results,
-            "timestamp": datetime.now().isoformat()
-        }
+            return {
+                "message": "CDC connector setup failed",
+                "success": False,
+                "error": "Failed to create connectors",
+                "timestamp": datetime.now().isoformat()
+            }
         
     except Exception as e:
-        logger.error(f"Failed to setup Debezium connectors: {str(e)}")
+        logger.error(f"Failed to setup dynamic CDC: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/cdc/status")
+async def get_cdc_status():
+    """Get comprehensive CDC status"""
+    try:
+        if not cdc_manager:
+            return {
+                "error": "CDC Manager not initialized",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        return cdc_manager.get_cdc_status()
+        
+    except Exception as e:
+        logger.error(f"Failed to get CDC status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/latest-records/{table_name}")
@@ -466,21 +495,33 @@ async def get_latest_records(table_name: str, limit: int = 5):
 
 @app.get("/metrics")
 async def get_metrics():
-    """Get detailed metrics for dashboard with real Debezium data"""
+    """Get detailed metrics for dashboard with dynamic table discovery"""
     try:
-        # Get table lists
+        # Get dynamic table lists
         mysql_tables = mysql_client.get_table_list() if mysql_client else []
         postgres_tables = postgres_client.get_table_list() if postgres_client else []
         
-        # Get table counts (limited to first 15 for performance)
+        # Filter tables for monitoring (exclude system tables)
+        excluded_tables = [
+            'migration_log', 'schema_migrations', 'flyway_schema_history',
+            'information_schema', 'performance_schema', 'mysql', 'sys'
+        ]
+        
+        monitored_tables = [
+            table for table in mysql_tables 
+            if table not in excluded_tables and not table.startswith('_')
+        ]
+        
+        # Get table counts for monitored tables
         mysql_table_counts = {}
         postgres_table_counts = {}
         
-        for table in mysql_tables[:15]:
+        for table in monitored_tables:
             mysql_table_counts[table] = await get_table_count(mysql_client, table)
         
-        for table in postgres_tables[:15]:
-            postgres_table_counts[table] = await get_table_count(postgres_client, table)
+        for table in postgres_tables:
+            if table in monitored_tables:
+                postgres_table_counts[table] = await get_table_count(postgres_client, table)
         
         # Get sync stats from Redis (daily stats)
         today = datetime.now().strftime('%Y%m%d')
@@ -510,8 +551,8 @@ async def get_metrics():
                 "mysql": {
                     "status": "connected" if mysql_client and mysql_client.test_connection() else "disconnected",
                     "tables": mysql_table_counts,
-                    "table_list": mysql_tables[:20],  # Show first 20 for dashboard
-                    "total_tables": len(mysql_tables)
+                    "table_list": monitored_tables,  # Show dynamic monitored tables
+                    "total_tables": len(monitored_tables)
                 },
                 "postgres": {
                     "status": "connected" if postgres_client and postgres_client.test_connection() else "disconnected",
@@ -520,11 +561,12 @@ async def get_metrics():
                     "total_tables": len(postgres_tables)
                 }
             },
-            # "cdc_stats": {
-            #     "events_processed": global_stats["cdc_events_processed"],
-            #     "last_event": global_stats["last_cdc_event"],
-            #     "connector_status": global_stats["connector_status"]
-            # },
+            "cdc_stats": {
+                "events_processed": global_stats["cdc_events_processed"],
+                "last_event": global_stats["last_cdc_event"],
+                "connector_status": global_stats["connector_status"],
+                "monitored_tables": global_stats.get("monitored_tables", [])
+            },
             "sync_stats": {
                 "total": combined_sync_stats,
                 "global_live": global_stats["sync_stats"],  # Live stats from CDC
@@ -761,8 +803,8 @@ async def get_overall_stats():
 async def get_kafka_status():
     """Get Kafka and CDC status"""
     try:
-        # Check if Kafka consumer is running
-        kafka_running = kafka_consumer is not None
+        # Check if CDC Manager is running
+        cdc_running = cdc_manager is not None and cdc_manager.running if cdc_manager else False
         
         # Get recent CDC events
         recent_events = []
@@ -773,14 +815,21 @@ async def get_kafka_status():
             except Exception:
                 pass
         
+        # Get CDC status from manager
+        cdc_status = {}
+        if cdc_manager:
+            cdc_status = cdc_manager.get_cdc_status()
+        
         return {
             "timestamp": datetime.now().isoformat(),
-            "is_running": kafka_running,
+            "is_running": cdc_running,
             "cdc_events_processed": global_stats["cdc_events_processed"],
             "last_cdc_event": global_stats["last_cdc_event"],
             "connector_status": global_stats["connector_status"],
+            "monitored_tables": global_stats.get("monitored_tables", []),
             "recent_events": recent_events,
-            "success_rate": 1.0 if global_stats["cdc_events_processed"] > 0 else 0.0
+            "success_rate": 1.0 if global_stats["cdc_events_processed"] > 0 else 0.0,
+            "cdc_manager_status": cdc_status
         }
         
     except Exception as e:
