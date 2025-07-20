@@ -18,7 +18,79 @@ class DataValidator:
         self.mysql = mysql_client
         self.postgres = postgres_client
         self.redis = redis_client
-        self.tables_to_sync = ['users', 'products', 'orders', 'order_items']
+        # Remove hardcoded table list - will be discovered dynamically
+        self._dynamic_tables_cache = []
+        self._last_table_discovery = None
+        self._table_discovery_interval = 300  # 5 minutes cache
+    
+    def get_tables_to_sync(self) -> List[str]:
+        """Get list of tables to sync (discovered dynamically from both databases)"""
+        current_time = datetime.now()
+        
+        # Check if we need to refresh the cache
+        if (self._last_table_discovery is None or 
+            (current_time - self._last_table_discovery).total_seconds() > self._table_discovery_interval):
+            
+            try:
+                # Get tables from both databases
+                mysql_tables = set(self.mysql.get_table_list())
+                postgres_tables = set(self.postgres.get_table_list())
+                
+                # Filter out system tables and temporary tables
+                filtered_mysql = self._filter_system_tables(mysql_tables)
+                filtered_postgres = self._filter_system_tables(postgres_tables)
+                
+                # Find intersection (tables that exist in both databases)
+                common_tables = filtered_mysql.intersection(filtered_postgres)
+                
+                # Include tables that exist in MySQL (source) - these are candidates for sync
+                sync_candidates = filtered_mysql
+                
+                self._dynamic_tables_cache = sorted(list(sync_candidates))
+                self._last_table_discovery = current_time
+                
+                logger.info(f"Dynamic table discovery: MySQL={len(filtered_mysql)}, PostgreSQL={len(filtered_postgres)}, Common={len(common_tables)}, Sync candidates={len(sync_candidates)}")
+                logger.info(f"Tables to sync: {self._dynamic_tables_cache}")
+                
+            except Exception as e:
+                logger.error(f"Failed to discover tables dynamically: {str(e)}")
+                # Fallback to default tables if discovery fails
+                self._dynamic_tables_cache = ['users', 'products', 'orders', 'order_items']
+        
+        return self._dynamic_tables_cache
+    
+    def _filter_system_tables(self, tables: set) -> set:
+        """Filter out system tables, temporary tables, and backup tables"""
+        filtered = set()
+        
+        for table in tables:
+            table_lower = table.lower()
+            
+            # Skip system tables
+            if any(table_lower.startswith(prefix) for prefix in [
+                'mysql', 'information_schema', 'performance_schema', 'sys',
+                'pg_', 'sql_', '__'
+            ]):
+                continue
+            
+            # Skip temporary and backup tables  
+            if any(suffix in table_lower for suffix in [
+                '_temp', '_tmp', '_backup', '_bak', '_old', '_test', '_staging'
+            ]):
+                continue
+            
+            # Skip migration-specific tables
+            if table_lower in ['migration_log', 'schema_migrations']:
+                continue
+                
+            filtered.add(table)
+        
+        return filtered
+    
+    @property
+    def tables_to_sync(self) -> List[str]:
+        """Property to maintain backward compatibility"""
+        return self.get_tables_to_sync()
     
     def _calculate_row_hash(self, row_data: Dict[str, Any], table_name: str = None) -> str:
         """Calculate hash for a row to detect changes"""

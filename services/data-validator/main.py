@@ -976,6 +976,87 @@ async def discover_tables():
         logger.error(f"Failed to discover tables: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/discovered-tables")
+async def get_discovered_tables():
+    """Get dynamically discovered tables from both MySQL and PostgreSQL"""
+    try:
+        if not mysql_client or not postgres_client or not data_validator:
+            raise HTTPException(status_code=503, detail="Database connections not available")
+        
+        # Get tables from both databases
+        mysql_tables = mysql_client.get_table_list()
+        postgres_tables = postgres_client.get_table_list()
+        
+        # Get filtered tables for sync
+        sync_tables = data_validator.get_tables_to_sync()
+        
+        # Get table counts
+        mysql_counts = {}
+        postgres_counts = {}
+        
+        for table in sync_tables:
+            try:
+                mysql_counts[table] = mysql_client.get_table_count(table)
+            except Exception as e:
+                mysql_counts[table] = f"Error: {str(e)}"
+        
+        for table in sync_tables:
+            try:
+                postgres_counts[table] = postgres_client.get_table_count(table)
+            except Exception as e:
+                postgres_counts[table] = f"Error: {str(e)}"
+        
+        return {
+            "discovery_info": {
+                "mysql_total_tables": len(mysql_tables),
+                "postgres_total_tables": len(postgres_tables), 
+                "sync_candidate_tables": len(sync_tables),
+                "last_discovery": data_validator._last_table_discovery.isoformat() if data_validator._last_table_discovery else None
+            },
+            "all_tables": {
+                "mysql": sorted(mysql_tables),
+                "postgres": sorted(postgres_tables)
+            },
+            "sync_tables": {
+                "tables": sync_tables,
+                "mysql_counts": mysql_counts,
+                "postgres_counts": postgres_counts
+            },
+            "table_comparison": {
+                "mysql_only": sorted(list(set(mysql_tables) - set(postgres_tables))),
+                "postgres_only": sorted(list(set(postgres_tables) - set(mysql_tables))),
+                "common": sorted(list(set(mysql_tables) & set(postgres_tables)))
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get discovered tables: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/refresh-table-discovery")
+async def refresh_table_discovery():
+    """Force refresh of table discovery cache"""
+    try:
+        if not data_validator:
+            raise HTTPException(status_code=503, detail="Data validator not available")
+        
+        # Clear cache to force rediscovery
+        data_validator._last_table_discovery = None
+        
+        # Get fresh table list
+        tables = data_validator.get_tables_to_sync()
+        
+        return {
+            "message": "Table discovery refreshed successfully",
+            "discovered_tables": tables,
+            "count": len(tables),
+            "refresh_time": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to refresh table discovery: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

@@ -186,6 +186,26 @@ app.get('/api/latest-records/:tableName', async (req, res) => {
   }
 });
 
+app.get('/api/discovered-tables', async (req, res) => {
+  try {
+    const response = await axios.get(`${config.validator.url}/discovered-tables`, { timeout: 10000 });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error getting discovered tables:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/refresh-table-discovery', async (req, res) => {
+  try {
+    const response = await axios.post(`${config.validator.url}/refresh-table-discovery`, {}, { timeout: 10000 });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error refreshing table discovery:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Helper functions
 async function testRedisConnection() {
   try {
