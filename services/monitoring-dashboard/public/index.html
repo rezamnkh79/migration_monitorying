@@ -196,11 +196,25 @@
         <div class="row mb-4">
             <div class="col-md-8">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-chart-line me-2"></i>
                             Table Migration Status
                         </h5>
+                        <div class="d-flex gap-2">
+                            <select id="tableFilter" class="form-select form-select-sm" style="width: auto;" onchange="applyTableFilter()">
+                                <option value="all">All Tables</option>
+                                <option value="synced">Synced Only</option>
+                                <option value="unsynced">Not Synced</option>
+                                <option value="errors">Errors Only</option>
+                            </select>
+                            <select id="tablesPerPage" class="form-select form-select-sm" style="width: auto;" onchange="changeTablePageSize()">
+                                <option value="10">10 per page</option>
+                                <option value="20" selected>20 per page</option>
+                                <option value="50">50 per page</option>
+                                <option value="all">Show All</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -221,6 +235,18 @@
                                 </tbody>
                             </table>
                         </div>
+                        
+                        <!-- Pagination Controls -->
+                        <nav aria-label="Table pagination" id="tablePaginationNav" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="text-muted">
+                                    <span id="paginationInfo">Showing 1-20 of 0 tables</span>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0" id="tablePagination">
+                                    <!-- Pagination buttons will be generated here -->
+                                </ul>
+                            </div>
+                        </nav>
                     </div>
                 </div>
             </div>
@@ -1052,7 +1078,8 @@
             const sortedTables = Array.from(allTableNames).sort();
             console.log(`Found ${sortedTables.length} unique tables`);
             
-            let html = '';
+            // Prepare table data for pagination system
+            allTablesData = [];
             let syncedTables = 0;
             let totalTablesWithData = 0;
             
@@ -1087,45 +1114,35 @@
                     statusClass = 'table-success';
                 } else {
                     statusIcon = '<i class="fas fa-exclamation-triangle text-warning"></i>';
-                    statusText = 'Out of Sync';
+                    statusText = 'Different';
                     statusClass = 'table-warning';
                 }
                 
-                // Format counts
-                const mysqlDisplay = mysqlCount === "ERROR" ? "ERROR" : 
-                                   typeof mysqlCount === 'number' ? mysqlCount.toLocaleString('en-US') : 
-                                   mysqlCount || '0';
-                const postgresDisplay = postgresCount === "ERROR" ? "ERROR" : 
-                                       typeof postgresCount === 'number' ? postgresCount.toLocaleString('en-US') : 
-                                       postgresCount || '0';
-                
-                html += `
-                    <tr class="${statusClass}">
-                        <td><strong>${tableName}</strong></td>
-                        <td><span class="badge bg-primary">${mysqlDisplay}</span></td>
-                        <td><span class="badge bg-success">${postgresDisplay}</span></td>
-                        <td>${statusIcon} ${statusText}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${tableName}')" title="View latest 5 records">
-                                <i class="fas fa-eye"></i> Latest
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                // Add to allTablesData for pagination
+                allTablesData.push({
+                    tableName,
+                    mysqlCount,
+                    postgresCount,
+                    isSync,
+                    hasData,
+                    statusIcon,
+                    statusText,
+                    statusClass
+                });
             });
             
-            if (html === '') {
-                html = '<tr><td colspan="5" class="text-center text-muted">No table data available</td></tr>';
-            }
+            console.log(`Main table updated: ${syncedTables}/${totalTablesWithData} synced (${totalTablesWithData > 0 ? ((syncedTables / totalTablesWithData) * 100).toFixed(1) : 0}%)`);
             
-            tablesStatus.innerHTML = html;
-            
-            // Update progress circle with real data
+            // Update progress circle
             const progress = totalTablesWithData > 0 ? (syncedTables / totalTablesWithData) * 100 : 0;
             updateProgressCircle(progress);
+            
+            // Update progress details
+            const progressDetails = document.getElementById('progressDetails');
             progressDetails.textContent = `${syncedTables} of ${totalTablesWithData} tables synced`;
             
-            console.log(`Main table updated: ${syncedTables}/${totalTablesWithData} synced (${progress.toFixed(1)}%)`);
+            // Render the paginated table
+            renderTablePage();
         }
 
         function addTestUser() {
@@ -1135,6 +1152,152 @@
             showNotification(message, 'info');
             addEventToLog(message);
         }
+
+        // Pagination and filtering variables
+        let allTablesData = [];
+        let currentPage = 1;
+        let tablesPerPage = 20;
+        let currentFilter = 'all';
+        
+        // Table pagination and filtering functions
+        function changeTablePageSize() {
+            const selector = document.getElementById('tablesPerPage');
+            tablesPerPage = selector.value === 'all' ? Infinity : parseInt(selector.value);
+            currentPage = 1;
+            renderTablePage();
+        }
+        
+        function applyTableFilter() {
+            const filterSelect = document.getElementById('tableFilter');
+            currentFilter = filterSelect.value;
+            currentPage = 1;
+            renderTablePage();
+        }
+        
+        function filterTables(tables) {
+            return tables.filter(table => {
+                switch(currentFilter) {
+                    case 'synced':
+                        return table.isSync && table.hasData;
+                    case 'unsynced':
+                        return !table.isSync && table.hasData;
+                    case 'errors':
+                        return table.statusText === 'Error';
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        function renderTablePage() {
+            const filteredTables = filterTables(allTablesData);
+            const totalPages = Math.ceil(filteredTables.length / tablesPerPage);
+            const startIndex = (currentPage - 1) * tablesPerPage;
+            const endIndex = startIndex + tablesPerPage;
+            const currentTables = filteredTables.slice(startIndex, endIndex);
+            
+            // Render main table
+            renderMainTable(currentTables);
+            
+            // Update pagination controls
+            updatePaginationControls(filteredTables.length, totalPages);
+        }
+        
+        function renderMainTable(tables) {
+            const tbody = document.getElementById('tablesStatus');
+            
+            if (tables.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No tables found with current filter</td></tr>';
+                return;
+            }
+            
+            let html = '';
+            tables.forEach(table => {
+                // Format counts properly like in the main table
+                const mysqlDisplay = table.mysqlCount === "ERROR" ? "ERROR" : 
+                                   (table.mysqlCount || 0).toString();
+                const postgresDisplay = table.postgresCount === "ERROR" ? "ERROR" : 
+                                       (table.postgresCount || 0).toString();
+                
+                html += `
+                    <tr class="${table.statusClass}">
+                        <td><strong>${table.tableName}</strong></td>
+                        <td class="text-center"><span class="badge bg-primary">${mysqlDisplay}</span></td>
+                        <td class="text-center"><span class="badge bg-success">${postgresDisplay}</span></td>
+                        <td class="text-center">${table.statusIcon} ${table.statusText}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" onclick="viewLatestRecords('${table.tableName}')">
+                                <i class="fas fa-eye me-1"></i>Latest
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+        
+        function updatePaginationControls(totalItems, totalPages) {
+            const paginationNav = document.getElementById('tablePaginationNav');
+            const paginationInfo = document.getElementById('paginationInfo');
+            const pagination = document.getElementById('tablePagination');
+            
+            if (totalPages <= 1 && tablesPerPage !== Infinity) {
+                paginationNav.style.display = 'none';
+                return;
+            }
+            
+            // Update info
+            const startItem = (currentPage - 1) * tablesPerPage + 1;
+            const endItem = Math.min(currentPage * tablesPerPage, totalItems);
+            paginationInfo.textContent = `Showing ${startItem}-${endItem} of ${totalItems} tables`;
+            
+            // Generate pagination buttons
+            let paginationHtml = '';
+            
+            // Previous button
+            if (currentPage > 1) {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a>
+                    </li>
+                `;
+            }
+            
+            // Page numbers
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                    </li>
+                `;
+            }
+            
+            // Next button
+            if (currentPage < totalPages) {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a>
+                    </li>
+                `;
+            }
+            
+            pagination.innerHTML = paginationHtml;
+            paginationNav.style.display = 'block';
+        }
+        
+        function changePage(page) {
+            currentPage = page;
+            renderTablePage();
+        }
+
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', () => {
