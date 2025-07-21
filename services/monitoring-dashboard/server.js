@@ -317,7 +317,7 @@ io.on('connection', (socket) => {
   // Send periodic updates
   const updateInterval = setInterval(() => {
     sendRealTimeUpdate(socket);
-  }, 30000); // Update every 30 seconds instead of 5
+  }, 300000); // Update every 30 seconds instead of 5
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);

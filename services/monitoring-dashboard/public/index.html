@@ -488,8 +488,8 @@
             // Use MySQL table list if available and not empty, otherwise use fallback
             let tables;
             if (mysqlTableList && Array.isArray(mysqlTableList) && mysqlTableList.length > 0) {
-                // Show first 10 tables for performance (reduced from 20)
-                tables = mysqlTableList.slice(0, 10);
+                // Use all tables, don't limit to 10
+                tables = mysqlTableList;
                 console.log('USING DYNAMIC TABLES:', tables.length, 'tables');
                 console.log('First 5 dynamic tables:', tables.slice(0, 5));
             } else {
@@ -497,17 +497,20 @@
                 console.log('USING FALLBACK TABLES');
             }
 
-            let html = '';
+            // Prepare table data for pagination system
+            allTablesData = [];
             let syncedTables = 0;
 
-            console.log('Processing tables:', tables);
+            console.log('Processing tables:', tables.length, 'total tables');
 
             tables.forEach((table, index) => {
                 const mysqlCount = mysqlTables[table] || 0;
                 const postgresCount = postgresTables[table] || 0;
                 const isSync = mysqlCount === postgresCount;
                 
-                console.log(`Table ${index + 1}: ${table} - MySQL: ${mysqlCount}, PostgreSQL: ${postgresCount}, Synced: ${isSync}`);
+                if (index < 5) { // Only log first 5 for performance
+                    console.log(`Table ${index + 1}: ${table} - MySQL: ${mysqlCount}, PostgreSQL: ${postgresCount}, Synced: ${isSync}`);
+                }
                 
                 if (isSync && mysqlCount > 0) syncedTables++;
 
@@ -515,25 +518,24 @@
                     '<i class="fas fa-check-circle text-success"></i>' : 
                     '<i class="fas fa-exclamation-triangle text-warning"></i>';
 
-                html += `
-                    <tr>
-                        <td><strong>${table}</strong></td>
-                        <td>${mysqlCount.toLocaleString('en-US')}</td>
-                        <td>${postgresCount.toLocaleString('en-US')}</td>
-                        <td>${statusIcon} ${isSync ? 'Synced' : 'Out of Sync'}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${table}')" title="View latest 5 records">
-                                <i class="fas fa-eye"></i> Latest
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                // Add to allTablesData for pagination
+                allTablesData.push({
+                    tableName: table,
+                    mysqlCount: mysqlCount,
+                    postgresCount: postgresCount,
+                    isSync: isSync,
+                    hasData: mysqlCount > 0 || postgresCount > 0,
+                    statusIcon: statusIcon,
+                    statusText: isSync ? 'Synced' : 'Out of Sync',
+                    statusClass: isSync ? 'table-success' : 'table-warning'
+                });
             });
 
-            console.log('Generated HTML length:', html.length);
-            console.log('Setting innerHTML...');
+            console.log('Total tables processed:', allTablesData.length);
+            console.log('Setting up pagination with', tablesPerPage, 'tables per page');
             
-            tablesStatus.innerHTML = html;
+            // Render the paginated table instead of generating static HTML
+            renderTablePage();
 
             // Update progress
             const progress = (syncedTables / tables.length) * 100;
@@ -934,7 +936,7 @@
             
             // Display MySQL tables
             if (data.mysql_tables && data.mysql_tables.length > 0) {
-                data.mysql_tables.slice(0, 10).forEach(table => {
+                data.mysql_tables.forEach(table => {
                     const count = data.mysql_counts?.[table.name] || 'N/A';
                     const samples = table.sample_data || [];
                     const sampleText = samples.length > 0 ? `${samples.length} records` : 'No data';
@@ -972,7 +974,7 @@
             
             // Display PostgreSQL tables
             if (data.postgres_tables && data.postgres_tables.length > 0) {
-                data.postgres_tables.slice(0, 10).forEach(table => {
+                data.postgres_tables.forEach(table => {
                     const count = data.postgres_counts?.[table.name] || 'N/A';
                     const samples = table.sample_data || [];
                     const sampleText = samples.length > 0 ? `${samples.length} records` : 'No data';
@@ -1162,8 +1164,13 @@
         // Table pagination and filtering functions
         function changeTablePageSize() {
             const selector = document.getElementById('tablesPerPage');
+            const oldValue = tablesPerPage;
             tablesPerPage = selector.value === 'all' ? Infinity : parseInt(selector.value);
             currentPage = 1;
+            
+            console.log(`Page size changed from ${oldValue} to ${tablesPerPage}`);
+            console.log(`Total tables available: ${allTablesData.length}`);
+            
             renderTablePage();
         }
         
@@ -1191,10 +1198,23 @@
 
         function renderTablePage() {
             const filteredTables = filterTables(allTablesData);
-            const totalPages = Math.ceil(filteredTables.length / tablesPerPage);
-            const startIndex = (currentPage - 1) * tablesPerPage;
-            const endIndex = startIndex + tablesPerPage;
-            const currentTables = filteredTables.slice(startIndex, endIndex);
+            
+            let currentTables;
+            let totalPages;
+            
+            if (tablesPerPage === Infinity) {
+                // Show all tables
+                currentTables = filteredTables;
+                totalPages = 1;
+                console.log(`Showing all ${currentTables.length} tables`);
+            } else {
+                // Paginate tables
+                totalPages = Math.ceil(filteredTables.length / tablesPerPage);
+                const startIndex = (currentPage - 1) * tablesPerPage;
+                const endIndex = startIndex + tablesPerPage;
+                currentTables = filteredTables.slice(startIndex, endIndex);
+                console.log(`Showing ${currentTables.length} of ${filteredTables.length} tables (page ${currentPage}/${totalPages})`);
+            }
             
             // Render main table
             renderMainTable(currentTables);
@@ -1226,8 +1246,8 @@
                         <td class="text-center"><span class="badge bg-success">${postgresDisplay}</span></td>
                         <td class="text-center">${table.statusIcon} ${table.statusText}</td>
                         <td class="text-center">
-                            <button class="btn btn-sm btn-outline-primary" onclick="viewLatestRecords('${table.tableName}')">
-                                <i class="fas fa-eye me-1"></i>Latest
+                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${table.tableName}')" title="View latest 5 records">
+                                <i class="fas fa-eye"></i> Latest
                             </button>
                         </td>
                     </tr>
@@ -1241,7 +1261,8 @@
             const paginationInfo = document.getElementById('paginationInfo');
             const pagination = document.getElementById('tablePagination');
             
-            if (totalPages <= 1 && tablesPerPage !== Infinity) {
+            // Hide pagination if "Show All" is selected or only one page
+            if (tablesPerPage === Infinity || totalPages <= 1) {
                 paginationNav.style.display = 'none';
                 return;
             }
