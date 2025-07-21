@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from kafka import KafkaConsumer
 import threading
 import asyncio
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -17,34 +18,70 @@ class DebeziumKafkaConsumer:
         self.consumer = None
         self.running = False
         
+    def get_active_topics(self):
+        """Get list of active table topics from Kafka"""
+        try:
+            result = subprocess.run(
+                ["docker", "exec", "kafka", "kafka-topics", "--bootstrap-server", "kafka:29092", "--list"],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            all_topics = result.stdout.strip().split('\n')
+            
+            # Filter for actual table topics (exclude system topics)
+            table_topics = []
+            excluded_prefixes = ['__', 'connect_', 'schema-', 'heartbeat']
+            
+            for topic in all_topics:
+                if topic and not any(topic.startswith(prefix) for prefix in excluded_prefixes):
+                    # Include topics that look like table names
+                    if '_' in topic or topic.isalpha():
+                        table_topics.append(topic)
+            
+            logger.info(f"Found {len(table_topics)} table topics: {table_topics[:10]}...")  # Show first 10
+            return table_topics
+            
+        except Exception as e:
+            logger.error(f"Failed to get topics from Kafka: {str(e)}")
+            # Fallback to common table names from the database
+            return ['buy_transaction', 'adtrace_tracker', 'user_message', 'email', 'sms']
+        
     def start_consuming(self):
         """Start consuming Debezium CDC events from Kafka"""
         try:
             logger.info("Initializing Kafka Consumer...")
             
-            # Subscribe to inventory table topics (Debezium creates topics with table names)
+            # Get dynamic list of table topics
+            table_topics = self.get_active_topics()
+            
+            if not table_topics:
+                logger.warning("No table topics found, using default topics")
+                table_topics = ['buy_transaction', 'adtrace_tracker', 'user_message']
+            
             self.consumer = KafkaConsumer(
                 bootstrap_servers=self.bootstrap_servers,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 key_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 auto_offset_reset='latest',  # Start from latest messages
                 enable_auto_commit=True,
-                group_id='inventory-migration-validator',
+                group_id='adtrace-cdc-validator',  # Updated group ID
                 session_timeout_ms=30000,
                 heartbeat_interval_ms=10000,
                 consumer_timeout_ms=1000  # Timeout for polling
             )
             
-            # Subscribe to inventory table topics
-            inventory_topics = ['users', 'products', 'orders', 'order_items']
-            self.consumer.subscribe(inventory_topics)
+            # Subscribe to dynamic table topics
+            self.consumer.subscribe(table_topics)
             
-            logger.info(f"Debezium CDC Consumer started, listening for inventory topics: {inventory_topics}")
+            logger.info(f"Debezium CDC Consumer started, listening for {len(table_topics)} topics")
             logger.info(f"📡 Bootstrap servers: {self.bootstrap_servers}")
+            logger.info(f"📋 Subscribed topics: {table_topics}")
             self.running = True
             
             # Start consuming messages
             message_count = 0
+            last_heartbeat = datetime.now()
+            
             while self.running:
                 try:
                     # Poll for messages with timeout
@@ -52,18 +89,22 @@ class DebeziumKafkaConsumer:
                     
                     if message_batch:
                         logger.info(f"Received {len(message_batch)} topic partitions with messages")
+                        
+                        for topic_partition, messages in message_batch.items():
+                            table_name = topic_partition.topic
+                            logger.info(f"Processing {len(messages)} messages from {table_name}")
+                            
+                            for message in messages:
+                                message_count += 1
+                                logger.info(f"Processing CDC message #{message_count} from {table_name}")
+                                # Process event synchronously to avoid async issues
+                                self.process_cdc_event_sync(message, table_name)
                     
-                    for topic_partition, messages in message_batch.items():
-                        logger.info(f"Processing {len(messages)} messages from {topic_partition.topic}")
-                        for message in messages:
-                            message_count += 1
-                            logger.info(f"Processing message #{message_count} from topic {topic_partition.topic}")
-                            # Process event synchronously to avoid async issues
-                            self.process_cdc_event_sync(message, topic_partition.topic)
-                    
-                    # Log every 60 seconds that we're still listening
-                    if message_count % 60 == 0:
-                        logger.info(f"Still listening for CDC events... (processed: {message_count})")
+                    # Heartbeat every 60 seconds
+                    now = datetime.now()
+                    if (now - last_heartbeat).seconds >= 60:
+                        logger.info(f"💓 CDC Consumer heartbeat - processed {message_count} events, listening to {len(table_topics)} topics")
+                        last_heartbeat = now
                             
                 except Exception as e:
                     logger.error(f"Error polling Kafka messages: {str(e)}")
