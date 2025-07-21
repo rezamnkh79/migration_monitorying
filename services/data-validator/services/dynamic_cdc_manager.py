@@ -1,6 +1,7 @@
 import json
 import logging
 import requests
+import os
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from kafka import KafkaConsumer, KafkaAdminClient
@@ -29,10 +30,18 @@ class DynamicCDCManager:
         self.redis = redis_client
         self.global_stats = global_stats
         
-        # Configuration
+        # Configuration - Get from environment variables
         self.kafka_bootstrap_servers = ['kafka:29092']
         self.connect_url = "http://connect:8083"
-        self.database_name = 'inventory'  # Default database
+        
+        # MySQL connection settings from environment
+        self.mysql_host = os.getenv('MYSQL_HOST', 'mysql')
+        self.mysql_port = os.getenv('MYSQL_PORT', '3306')
+        self.mysql_user = os.getenv('MYSQL_USER', 'debezium')
+        self.mysql_password = os.getenv('MYSQL_PASSWORD', 'dbz')
+        self.database_name = os.getenv('MYSQL_DATABASE', 'inventory')
+        
+        logger.info(f"🔧 CDC Manager initialized for MySQL: {self.mysql_host}:{self.mysql_port}/{self.database_name}")
         
         # Dynamic table discovery
         self.monitored_tables = []
@@ -144,21 +153,25 @@ class DynamicCDCManager:
             # Build table include list dynamically
             table_include_list = [f"{self.database_name}.{table}" for table in self.monitored_tables]
             
+            # Generate unique server ID based on host
+            import hashlib
+            server_id = str(abs(hash(self.mysql_host)) % 10000000)
+            
             mysql_connector_config = {
                 "name": "dynamic-mysql-source",
                 "config": {
                     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
                     "tasks.max": "1",
-                    "database.hostname": "mysql",
-                    "database.port": "3306", 
-                    "database.user": "debezium",
-                    "database.password": "dbz",
-                    "database.server.id": "184060",
-                    "database.server.name": "dynamic_mysql",
+                    "database.hostname": self.mysql_host,
+                    "database.port": self.mysql_port,
+                    "database.user": self.mysql_user,
+                    "database.password": self.mysql_password,
+                    "database.server.id": server_id,
+                    "database.server.name": f"dynamic_mysql_{server_id}",
                     "database.include.list": self.database_name,
                     "table.include.list": ",".join(table_include_list),
                     "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
-                    "schema.history.internal.kafka.topic": "schema-changes.dynamic",
+                    "schema.history.internal.kafka.topic": f"schema-changes.dynamic.{server_id}",
                     "include.schema.changes": "true",
                     "topic.prefix": "dynamic",
                     "snapshot.mode": "initial",
@@ -176,7 +189,8 @@ class DynamicCDCManager:
                 }
             }
             
-            logger.info(f"📡 Creating MySQL connector for tables: {table_include_list}")
+            logger.info(f"📡 Creating MySQL connector for {self.mysql_host}:{self.mysql_port}/{self.database_name}")
+            logger.info(f"📊 Tables to monitor: {table_include_list}")
             
             response = requests.post(
                 f"{self.connect_url}/connectors",

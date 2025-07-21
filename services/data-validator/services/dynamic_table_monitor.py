@@ -3,6 +3,7 @@ import logging
 import requests
 import threading
 import time
+import os
 from datetime import datetime
 from typing import Dict, List, Set, Any, Optional
 from kafka import KafkaConsumer, KafkaAdminClient
@@ -30,10 +31,18 @@ class DynamicTableMonitor:
         self.redis = redis_client
         self.global_stats = global_stats
         
-        # Configuration
+        # Configuration - Get from environment variables
         self.kafka_bootstrap_servers = ['kafka:29092']
         self.connect_url = "http://connect:8083"
         self.database_name = self._get_database_name()
+        
+        # MySQL connection settings from environment
+        self.mysql_host = os.getenv('MYSQL_HOST', 'mysql')
+        self.mysql_port = os.getenv('MYSQL_PORT', '3306')
+        self.mysql_user = os.getenv('MYSQL_USER', 'debezium')
+        self.mysql_password = os.getenv('MYSQL_PASSWORD', 'dbz')
+        
+        logger.info(f"🔧 Table Monitor initialized for MySQL: {self.mysql_host}:{self.mysql_port}/{self.database_name}")
         
         # Dynamic monitoring state
         self.current_tables: Set[str] = set()
@@ -65,7 +74,6 @@ class DynamicTableMonitor:
                         return db_name
             
             # Fallback to environment variable
-            import os
             return os.getenv('MYSQL_DATABASE', 'inventory')
         except Exception as e:
             logger.warning(f"Could not detect database name: {e}")
@@ -346,21 +354,25 @@ class DynamicTableMonitor:
         try:
             table_include_list = [f"{self.database_name}.{table}" for table in self.current_tables]
             
+            # Generate unique server ID based on host
+            import hashlib
+            server_id = str(abs(hash(self.mysql_host)) % 10000000)
+            
             connector_config = {
                 "name": "dynamic-mysql-source",
                 "config": {
                     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
                     "tasks.max": "1",
-                    "database.hostname": "mysql",
-                    "database.port": "3306",
-                    "database.user": "debezium",
-                    "database.password": "dbz",
-                    "database.server.id": "184070",
-                    "database.server.name": "dynamic_mysql",
+                    "database.hostname": self.mysql_host,
+                    "database.port": self.mysql_port,
+                    "database.user": self.mysql_user,
+                    "database.password": self.mysql_password,
+                    "database.server.id": server_id,
+                    "database.server.name": f"dynamic_mysql_{server_id}",
                     "database.include.list": self.database_name,
                     "table.include.list": ",".join(table_include_list),
                     "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
-                    "schema.history.internal.kafka.topic": "schema-changes.dynamic",
+                    "schema.history.internal.kafka.topic": f"schema-changes.dynamic.{server_id}",
                     "include.schema.changes": "true",
                     "topic.prefix": "dynamic",
                     "snapshot.mode": "initial",
@@ -378,8 +390,8 @@ class DynamicTableMonitor:
                 }
             }
             
-            logger.info(f"Creating dynamic connector for {len(self.current_tables)} tables")
-            logger.debug(f"Tables: {list(self.current_tables)}")
+            logger.info(f"📡 Creating MySQL connector for {self.mysql_host}:{self.mysql_port}/{self.database_name}")
+            logger.info(f"📊 Tables to monitor: {table_include_list}")
             
             response = requests.post(
                 f"{self.connect_url}/connectors",
@@ -389,14 +401,17 @@ class DynamicTableMonitor:
             )
             
             if response.status_code in [200, 201]:
-                logger.info("Dynamic MySQL connector created successfully")
+                logger.info("✅ Dynamic MySQL source connector created successfully")
+                self.global_stats["connector_status"]["mysql"] = "running"
                 return True
             else:
-                logger.error(f"Failed to create connector: {response.status_code} - {response.text}")
+                logger.error(f"❌ Failed to create MySQL connector: {response.status_code} - {response.text}")
+                self.global_stats["connector_status"]["mysql"] = "failed"
                 return False
                 
         except Exception as e:
-            logger.error(f"Error creating dynamic connector: {str(e)}")
+            logger.error(f"❌ Error creating MySQL connector: {str(e)}")
+            self.global_stats["connector_status"]["mysql"] = "error"
             return False
     
     def _update_connector_with_new_tables(self, new_tables: Set[str]):
