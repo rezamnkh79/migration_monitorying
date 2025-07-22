@@ -108,7 +108,7 @@ app.get('/api/status', async (req, res) => {
 app.get('/api/metrics', async (req, res) => {
   try {
     // Get metrics from data validator service with dynamic table lists
-    const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 5000 });
+    const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 15000 });
     res.json(response.data);
   } catch (error) {
     console.error('Error getting metrics from validator:', error.message);
@@ -216,7 +216,7 @@ async function testPostgresConnection() {
 
 async function testValidatorConnection() {
   try {
-    const response = await axios.get(`${config.validator.url}/health`, { timeout: 5000 });
+    const response = await axios.get(`${config.validator.url}/health`, { timeout: 15000 });
     return { status: 'connected', message: 'Data validator is healthy', data: response.data };
   } catch (error) {
     return { status: 'disconnected', message: error.message };
@@ -256,8 +256,8 @@ async function getFallbackMetrics() {
   const mysqlTables = await getMySQLTables();
   const postgresTables = await getPostgresTables();
   
-  // Use tables from MySQL as the source of truth
-  const tables = mysqlTables.length > 0 ? mysqlTables : ['users', 'products', 'orders', 'order_items'];
+  // Use tables from MySQL as the source of truth - no hardcoded fallback
+  const tables = mysqlTables.length > 0 ? mysqlTables : [];
   
   const metrics = {
     timestamp: new Date().toISOString(),
@@ -272,12 +272,12 @@ async function getFallbackMetrics() {
   };
 
   try {
-    // Get MySQL table counts
-    if (mysqlConnection) {
+    // Get MySQL table counts for all discovered tables
+    if (mysqlConnection && tables.length > 0) {
       metrics.database_stats.mysql.status = 'connected';
       for (const table of tables) {
         try {
-          const [rows] = await mysqlConnection.execute(`SELECT COUNT(*) as count FROM ${table}`);
+          const [rows] = await mysqlConnection.execute(`SELECT COUNT(*) as count FROM \`${table}\``);
           metrics.database_stats.mysql.tables[table] = rows[0].count;
         } catch (error) {
           console.error(`Error counting MySQL table ${table}:`, error);
@@ -286,12 +286,12 @@ async function getFallbackMetrics() {
       }
     }
 
-    // Get PostgreSQL table counts
-    if (postgresClient) {
+    // Get PostgreSQL table counts for all discovered tables
+    if (postgresClient && tables.length > 0) {
       metrics.database_stats.postgres.status = 'connected';
       for (const table of tables) {
         try {
-          const result = await postgresClient.query(`SELECT COUNT(*) as count FROM ${table}`);
+          const result = await postgresClient.query(`SELECT COUNT(*) as count FROM "${table}"`);
           metrics.database_stats.postgres.tables[table] = parseInt(result.rows[0].count);
         } catch (error) {
           console.error(`Error counting PostgreSQL table ${table}:`, error);
@@ -334,7 +334,7 @@ async function sendRealTimeUpdate(socket) {
     // Get current metrics from data validator API first
     let metrics;
     try {
-      const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 5000 });
+      const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 15000 });
       metrics = response.data;
       console.log("Got metrics from validator API, MySQL tables:", metrics?.database_stats?.mysql?.table_list?.length || 0);
     } catch (error) {
@@ -351,7 +351,7 @@ async function sendRealTimeUpdate(socket) {
     // Get validation status
     let validationStatus = null;
     try {
-      const response = await axios.get(`${config.validator.url}/stats`, { timeout: 3000 });
+      const response = await axios.get(`${config.validator.url}/stats`, { timeout: 10000 });
       validationStatus = response.data;
     } catch (error) {
       console.error("Failed to get validation status:", error.message);
@@ -360,7 +360,7 @@ async function sendRealTimeUpdate(socket) {
     // Get Kafka status
     let kafkaStatus = null;
     try {
-      const response = await axios.get(`${config.validator.url}/kafka-status`, { timeout: 3000 });
+      const response = await axios.get(`${config.validator.url}/kafka-status`, { timeout: 10000 });
       kafkaStatus = response.data;
     } catch (error) {
       console.error("Failed to get Kafka status:", error.message);

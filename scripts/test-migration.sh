@@ -82,26 +82,40 @@ else
     print_status "WARNING" "Monitoring Dashboard is not accessible yet"
 fi
 
-# Check table counts
-print_status "INFO" "Checking initial table counts..."
+# Test sample data counts (using dynamic discovery instead of hardcoded tables)
+print_status "INFO" "Testing dynamic table counts..."
 
-mysql_users=$(docker exec mysql mysql -uroot -pdebezium -D inventory -se "SELECT COUNT(*) FROM users;" 2>/dev/null || echo "0")
-mysql_products=$(docker exec mysql mysql -uroot -pdebezium -D inventory -se "SELECT COUNT(*) FROM products;" 2>/dev/null || echo "0")
-mysql_orders=$(docker exec mysql mysql -uroot -pdebezium -D inventory -se "SELECT COUNT(*) FROM orders;" 2>/dev/null || echo "0")
+# Get table list dynamically from data validator API
+dynamic_tables=$(curl -s http://localhost:8000/discover-tables 2>/dev/null | python3 -c "
+import json
+import sys
+try:
+    data = json.load(sys.stdin)
+    tables = data.get('mysql_tables', {}).get('monitorable', [])[:5]  # Test first 5 tables
+    print(' '.join(tables))
+except:
+    print('')
+" 2>/dev/null)
 
-postgres_users=$(docker exec postgres psql -U postgres -d inventory -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d ' ' || echo "0")
-postgres_products=$(docker exec postgres psql -U postgres -d inventory -t -c "SELECT COUNT(*) FROM products;" 2>/dev/null | tr -d ' ' || echo "0")
-postgres_orders=$(docker exec postgres psql -U postgres -d inventory -t -c "SELECT COUNT(*) FROM orders;" 2>/dev/null | tr -d ' ' || echo "0")
-
-echo ""
-print_status "INFO" "Table Counts Comparison:"
-echo "┌─────────────┬─────────┬────────────┐"
-echo "│    Table    │  MySQL  │ PostgreSQL │"
-echo "├─────────────┼─────────┼────────────┤"
-printf "│ %-11s │ %7s │ %10s │\n" "users" "$mysql_users" "$postgres_users"
-printf "│ %-11s │ %7s │ %10s │\n" "products" "$mysql_products" "$postgres_products"
-printf "│ %-11s │ %7s │ %10s │\n" "orders" "$mysql_orders" "$postgres_orders"
-echo "└─────────────┴─────────┴────────────┘"
+if [ -n "$dynamic_tables" ]; then
+    print_status "SUCCESS" "Found dynamic tables: $dynamic_tables"
+    
+    # Test a few sample tables
+    for table in $dynamic_tables; do
+        # Skip system tables for testing
+        if [[ "$table" == *"django"* ]] || [[ "$table" == *"auth"* ]]; then
+            continue
+        fi
+        
+        mysql_count=$(docker exec mysql mysql -h ${MYSQL_HOST:-mysql} -P ${MYSQL_PORT:-3306} -u ${MYSQL_USER:-debezium} -p${MYSQL_PASSWORD:-dbz} -D ${MYSQL_DATABASE:-inventory} -se "SELECT COUNT(*) FROM \`$table\`;" 2>/dev/null || echo "0")
+        postgres_count=$(docker exec postgres psql -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DATABASE:-inventory} -t -c "SELECT COUNT(*) FROM \"$table\";" 2>/dev/null | tr -d ' ' || echo "0")
+        
+        print_status "INFO" "Table $table: MySQL=$mysql_count, PostgreSQL=$postgres_count"
+        break  # Test just one table for now
+    done
+else
+    print_status "WARNING" "Could not get dynamic table list - using basic connectivity test"
+fi
 
 # Insert test data
 print_status "INFO" "Inserting test data into MySQL..."

@@ -78,9 +78,10 @@ class DynamicCDCManager:
             
         except Exception as e:
             logger.error(f"❌ Failed to discover tables: {str(e)}")
-            # Fallback to default tables
-            self.monitored_tables = ['users', 'products', 'orders', 'order_items']
-            
+            # No hardcoded fallback - use empty list and try to reconnect later
+            self.monitored_tables = []
+            logger.warning("⚠️ Using empty table list - will retry discovery later")
+    
     def setup_dynamic_connectors(self):
         """Setup Debezium connectors for all discovered tables"""
         try:

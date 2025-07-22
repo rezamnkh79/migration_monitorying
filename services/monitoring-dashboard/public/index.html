@@ -485,16 +485,17 @@
             console.log('Is array?', Array.isArray(mysqlTableList));
             console.log('Length?', mysqlTableList.length);
             
-            // Use MySQL table list if available and not empty, otherwise use fallback
+            // Use MySQL table list if available and not empty, otherwise show empty state
             let tables;
             if (mysqlTableList && Array.isArray(mysqlTableList) && mysqlTableList.length > 0) {
-                // Use all tables, don't limit to 10
+                // Use all tables dynamically - no limits or hardcoding
                 tables = mysqlTableList;
                 console.log('USING DYNAMIC TABLES:', tables.length, 'tables');
                 console.log('First 5 dynamic tables:', tables.slice(0, 5));
             } else {
-                tables = ['users', 'products', 'orders', 'order_items'];
-                console.log('USING FALLBACK TABLES');
+                // No hardcoded fallback - show empty state if no tables found
+                tables = [];
+                console.log('NO TABLES FOUND - Database might be disconnected');
             }
 
             // Prepare table data for pagination system

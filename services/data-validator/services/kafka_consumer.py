@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from kafka import KafkaConsumer
 import threading
 import asyncio
@@ -17,69 +17,122 @@ class DebeziumKafkaConsumer:
         self.consumer = None
         self.running = False
         
+    def get_dynamic_topics(self) -> List[str]:
+        """Get dynamic list of topics to subscribe to"""
+        try:
+            # Get tables from data validator (which uses dynamic discovery)
+            if hasattr(self.data_validator, 'get_tables_to_sync'):
+                tables = self.data_validator.get_tables_to_sync()
+                if tables:
+                    logger.info(f"Using dynamic topic list: {len(tables)} tables")
+                    return tables
+            
+            # Fallback: get tables from monitoring service
+            if hasattr(self.monitoring_service, 'get_table_list'):
+                tables = self.monitoring_service.get_table_list()
+                if tables:
+                    logger.info(f"Using monitoring service topic list: {len(tables)} tables")
+                    return tables
+            
+            # Last resort: empty list - will be updated when tables are discovered
+            logger.warning("No dynamic tables found - will subscribe to all available topics")
+            return []
+            
+        except Exception as e:
+            logger.error(f"Failed to get dynamic topics: {str(e)}")
+            return []
+        
     def start_consuming(self):
         """Start consuming Debezium CDC events from Kafka"""
         try:
-            logger.info("Initializing Kafka Consumer...")
+            logger.info("Initializing Dynamic Kafka Consumer...")
             
-            # Subscribe to inventory table topics (Debezium creates topics with table names)
+            # Get dynamic topics
+            dynamic_topics = self.get_dynamic_topics()
+            
+            # Subscribe to dynamic table topics
             self.consumer = KafkaConsumer(
                 bootstrap_servers=self.bootstrap_servers,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 key_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 auto_offset_reset='latest',  # Start from latest messages
                 enable_auto_commit=True,
-                group_id='inventory-migration-validator',
+                group_id='adtrace-migration-validator',  # Updated group ID
                 session_timeout_ms=30000,
                 heartbeat_interval_ms=10000,
                 consumer_timeout_ms=1000  # Timeout for polling
             )
             
-            # Subscribe to inventory table topics
-            inventory_topics = ['users', 'products', 'orders', 'order_items']
-            self.consumer.subscribe(inventory_topics)
+            if dynamic_topics:
+                # Subscribe to discovered topics
+                self.consumer.subscribe(dynamic_topics)
+                logger.info(f"Debezium CDC Consumer started, listening for {len(dynamic_topics)} dynamic topics")
+                logger.info(f"📡 Sample topics: {dynamic_topics[:5]}{'...' if len(dynamic_topics) > 5 else ''}")
+            else:
+                # Subscribe to pattern to catch any new topics
+                self.consumer.subscribe(pattern='.*')
+                logger.info("Debezium CDC Consumer started with pattern subscription (will discover topics dynamically)")
             
-            logger.info(f"Debezium CDC Consumer started, listening for inventory topics: {inventory_topics}")
             logger.info(f"📡 Bootstrap servers: {self.bootstrap_servers}")
             self.running = True
             
             # Start consuming messages
             message_count = 0
+            last_log_time = datetime.now()
+            
             while self.running:
                 try:
                     # Poll for messages with timeout
                     message_batch = self.consumer.poll(timeout_ms=1000)
                     
-                    if message_batch:
-                        logger.info(f"Received {len(message_batch)} topic partitions with messages")
-                    
                     for topic_partition, messages in message_batch.items():
-                        logger.info(f"Processing {len(messages)} messages from {topic_partition.topic}")
+                        topic = topic_partition.topic
+                        
                         for message in messages:
                             message_count += 1
-                            logger.info(f"Processing message #{message_count} from topic {topic_partition.topic}")
-                            # Process event synchronously to avoid async issues
-                            self.process_cdc_event_sync(message, topic_partition.topic)
-                    
-                    # Log every 60 seconds that we're still listening
-                    if message_count % 60 == 0:
-                        logger.info(f"Still listening for CDC events... (processed: {message_count})")
                             
+                            # Process the CDC event
+                            self.process_cdc_event_sync(message, topic)
+                            
+                            # Log progress every 50 messages
+                            if message_count % 50 == 0:
+                                logger.info(f"Processed {message_count} CDC messages. Latest from topic: {topic}")
+                            
+                            # Update topic subscription every 100 messages to catch new tables
+                            if message_count % 100 == 0:
+                                self.update_dynamic_subscription()
+                    
+                    # Periodic subscription update (every 30 seconds)
+                    now = datetime.now()
+                    if (now - last_log_time).total_seconds() > 30:
+                        self.update_dynamic_subscription()
+                        last_log_time = now
+                        
                 except Exception as e:
-                    logger.error(f"Error polling Kafka messages: {str(e)}")
-                    continue
+                    if self.running:  # Only log if we're supposed to be running
+                        logger.error(f"Error consuming CDC messages: {str(e)}")
+                        
+        except Exception as e:
+            logger.error(f"Failed to start Kafka Consumer: {str(e)}")
+        finally:
+            if self.consumer:
+                self.consumer.close()
+                
+    def update_dynamic_subscription(self):
+        """Update Kafka subscription with latest discovered tables"""
+        try:
+            if not self.consumer:
+                return
+                
+            new_topics = self.get_dynamic_topics()
+            if new_topics:
+                current_topics = self.consumer.subscription()
+                if set(new_topics) != current_topics:
+                    logger.info(f"Updating Kafka subscription: {len(new_topics)} topics")
+                    self.consumer.subscribe(new_topics)
                     
         except Exception as e:
-            logger.error(f"Failed to start Kafka consumer: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            
-    def stop_consuming(self):
-        """Stop consuming CDC events"""
-        self.running = False
-        if self.consumer:
-            self.consumer.close()
-            logger.info("Debezium CDC Consumer stopped")
+            logger.error(f"Failed to update dynamic subscription: {str(e)}")
     
     def process_cdc_event_sync(self, message, topic):
         """Process a single CDC event from Debezium (synchronous version)"""

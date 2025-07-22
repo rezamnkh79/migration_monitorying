@@ -18,7 +18,79 @@ class DataValidator:
         self.mysql = mysql_client
         self.postgres = postgres_client
         self.redis = redis_client
-        self.tables_to_sync = ['users', 'products', 'orders', 'order_items']
+        # Don't hardcode tables - get them dynamically from database
+        self._cached_tables = None
+        self._last_table_refresh = None
+        self._table_refresh_interval = 300  # Refresh table list every 5 minutes
+    
+    def get_tables_to_sync(self) -> List[str]:
+        """Get dynamic list of tables to sync from MySQL database"""
+        current_time = datetime.now()
+        
+        # Check if we need to refresh the table list
+        if (self._cached_tables is None or 
+            self._last_table_refresh is None or 
+            (current_time - self._last_table_refresh).total_seconds() > self._table_refresh_interval):
+            
+            self._refresh_table_list()
+        
+        return self._cached_tables or []
+    
+    def _refresh_table_list(self):
+        """Refresh the table list from MySQL database"""
+        try:
+            logger.info("Refreshing table list from MySQL database...")
+            
+            # Get all tables from MySQL
+            mysql_tables = self.mysql.get_table_list() if self.mysql else []
+            
+            # Filter out system and excluded tables
+            excluded_patterns = [
+                'information_schema', 'performance_schema', 'mysql', 'sys',
+                'migration_log', 'schema_migrations', 'flyway_schema_history'
+            ]
+            
+            def should_sync_table(table_name):
+                table_lower = table_name.lower()
+                
+                # Skip system tables
+                for pattern in excluded_patterns:
+                    if pattern in table_lower:
+                        return False
+                
+                # Skip tables starting with underscore or tmp
+                if table_name.startswith('_') or table_name.startswith('tmp_'):
+                    return False
+                
+                # Skip backup tables
+                if '_backup' in table_lower or '_bak' in table_lower:
+                    return False
+                
+                return True
+            
+            # Filter tables for synchronization
+            filtered_tables = [table for table in mysql_tables if should_sync_table(table)]
+            
+            # Update cache
+            self._cached_tables = filtered_tables
+            self._last_table_refresh = datetime.now()
+            
+            logger.info(f"Discovered {len(filtered_tables)} tables to sync: {filtered_tables}")
+            
+            # Store in Redis for other services
+            if self.redis:
+                self.redis.setex('dynamic:tables_to_sync', 300, json.dumps(filtered_tables))
+                
+        except Exception as e:
+            logger.error(f"Failed to refresh table list: {str(e)}")
+            # Fallback to minimal set if discovery fails
+            if not self._cached_tables:
+                self._cached_tables = ['adtrace_tracker']
+    
+    @property
+    def tables_to_sync(self) -> List[str]:
+        """Dynamic property that returns current list of tables to sync"""
+        return self.get_tables_to_sync()
     
     def _calculate_row_hash(self, row_data: Dict[str, Any], table_name: str = None) -> str:
         """Calculate hash for a row to detect changes"""

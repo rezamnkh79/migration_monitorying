@@ -14,21 +14,89 @@ class MonitoringService:
         self.redis = redis_client
         self.mysql = mysql_client
         self.postgres = postgres_client
-        # Don't hardcode tables anymore
-        self.default_tables = ['users', 'products', 'orders', 'order_items']
+        # No hardcoded tables - completely dynamic
+        self._cached_tables = None
+        self._last_table_refresh = None
+        self._table_refresh_interval = 300  # Refresh every 5 minutes
     
     def get_table_list(self) -> List[str]:
         """Get dynamic list of tables from MySQL"""
+        current_time = datetime.now()
+        
+        # Check if we need to refresh the table list
+        if (self._cached_tables is None or 
+            self._last_table_refresh is None or 
+            (current_time - self._last_table_refresh).total_seconds() > self._table_refresh_interval):
+            
+            self._refresh_table_list()
+        
+        return self._cached_tables or []
+    
+    def _refresh_table_list(self):
+        """Refresh the table list from MySQL database"""
         try:
-            mysql_tables = self.mysql.get_table_list()
+            logger.info("Refreshing table list from MySQL database...")
+            
+            # Get all tables from MySQL
+            mysql_tables = self.mysql.get_table_list() if self.mysql else []
+            
             if mysql_tables:
-                return mysql_tables
+                # Filter out system and excluded tables
+                excluded_patterns = [
+                    'information_schema', 'performance_schema', 'mysql', 'sys',
+                    'migration_log', 'schema_migrations', 'flyway_schema_history'
+                ]
+                
+                def should_monitor_table(table_name):
+                    table_lower = table_name.lower()
+                    
+                    # Skip system tables
+                    for pattern in excluded_patterns:
+                        if pattern in table_lower:
+                            return False
+                    
+                    # Skip tables starting with underscore or tmp
+                    if table_name.startswith('_') or table_name.startswith('tmp_'):
+                        return False
+                    
+                    # Skip backup tables
+                    if '_backup' in table_lower or '_bak' in table_lower:
+                        return False
+                    
+                    return True
+                
+                # Filter tables for monitoring
+                filtered_tables = [table for table in mysql_tables if should_monitor_table(table)]
+                
+                # Update cache
+                self._cached_tables = filtered_tables
+                self._last_table_refresh = datetime.now()
+                
+                logger.info(f"Discovered {len(filtered_tables)} tables to monitor: {filtered_tables[:10]}{'...' if len(filtered_tables) > 10 else ''}")
+                
+                # Store in Redis for other services
+                if self.redis:
+                    self.redis.setex('dynamic:monitored_tables', 300, json.dumps(filtered_tables))
             else:
-                # Fallback to default tables if MySQL is not available
-                return self.default_tables
+                logger.warning("No tables found in MySQL database")
+                if not self._cached_tables:
+                    self._cached_tables = []
+                    
         except Exception as e:
-            logger.error(f"Failed to get table list: {str(e)}")
-            return self.default_tables
+            logger.error(f"Failed to refresh table list: {str(e)}")
+            # Try to get from Redis cache as fallback
+            try:
+                cached_data = self.redis.get('dynamic:monitored_tables')
+                if cached_data:
+                    self._cached_tables = json.loads(cached_data)
+                    logger.info("Using cached table list from Redis")
+                elif not self._cached_tables:
+                    # Absolute fallback
+                    self._cached_tables = []
+                    logger.warning("Using empty table list as last resort")
+            except Exception:
+                if not self._cached_tables:
+                    self._cached_tables = []
     
     def collect_metrics(self):
         """Collect current metrics from all data sources"""
@@ -109,7 +177,7 @@ class MonitoringService:
         
         try:
             # Get sync stats for each table
-            for table in self.default_tables: # Use default_tables here
+            for table in self.get_table_list(): # Use get_table_list() here
                 table_stats = self.redis.hgetall(f"stats:{table}:{today}")
                 last_sync = self.redis.get(f"last_sync:{table}")
                 
@@ -192,7 +260,7 @@ class MonitoringService:
     def _check_sync_lag_warning(self) -> bool:
         """Check if any table has significant sync lag"""
         try:
-            for table in self.default_tables: # Use default_tables here
+            for table in self.get_table_list(): # Use get_table_list() here
                 last_sync = self.redis.get(f"last_sync:{table}")
                 if last_sync:
                     lag = self._calculate_sync_lag(last_sync)
@@ -240,7 +308,7 @@ class MonitoringService:
                 elif postgres_table_list:
                     tables = postgres_table_list
                 else:
-                    tables = self.default_tables
+                    tables = self.get_table_list() # Use get_table_list() here
                 
                 # Calculate migration progress
                 total_tables = len(tables)

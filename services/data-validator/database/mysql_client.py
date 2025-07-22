@@ -28,14 +28,14 @@ class MySQLClient:
             self.engine = create_engine(
                 connection_string,
                 pool_pre_ping=True,
-                pool_recycle=3600,
-                pool_size=2,  # Limit connection pool size
-                max_overflow=1,  # Limit overflow connections
-                pool_timeout=10,  # Timeout for getting connection from pool
+                pool_recycle=1800,  # Reduced from 3600
+                pool_size=3,  # Increased from 2
+                max_overflow=2,  # Increased from 1
+                pool_timeout=20,  # Increased from 10
                 connect_args={
-                    'connect_timeout': 5,  # Connection timeout
-                    'read_timeout': 10,    # Read timeout
-                    'write_timeout': 10    # Write timeout
+                    'connect_timeout': 10,  # Increased from 5
+                    'read_timeout': 30,    # Increased from 10
+                    'write_timeout': 30    # Increased from 10
                 },
                 echo=False
             )

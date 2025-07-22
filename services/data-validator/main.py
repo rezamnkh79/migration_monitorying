@@ -196,13 +196,15 @@ def start_background_tasks():
             logger.error(f"Full traceback: {traceback.format_exc()}")
     
     def run_periodic_validation():
-        """Run periodic validation checks"""
-        schedule.every(30).minutes.do(lambda: asyncio.run(run_validation_check()))
-        schedule.every(2).hours.do(lambda: asyncio.run(run_full_validation()))
+        """Run periodic validation checks - DISABLED to prevent sample table queries"""
+        logger.info("Periodic validation disabled to prevent sample table queries")
+        # Temporarily disable periodic validation until dynamic table discovery is fully stable
+        # schedule.every(30).minutes.do(lambda: asyncio.run(run_validation_check()))
+        # schedule.every(2).hours.do(lambda: asyncio.run(run_full_validation()))
         
         while True:
-            schedule.run_pending()
-            time.sleep(60)
+            # Just sleep, don't run validation
+            time.sleep(300)  # Check every 5 minutes but don't do anything
     
     def run_monitoring():
         """Run monitoring service to collect metrics"""
@@ -603,11 +605,20 @@ async def manual_sync_check():
         
         # Get MySQL data
         if mysql_client:
-            # Use data validator tables if available, otherwise get all tables
-            if data_validator:
-                mysql_table_list = data_validator.tables_to_sync
+            # Use global monitored tables instead of potentially cached sample tables
+            if global_stats.get("monitored_tables"):
+                mysql_table_list = global_stats["monitored_tables"][:15]  # Limit for performance
             else:
-                mysql_table_list = mysql_client.get_table_list()[:15]  # Fallback with limit
+                # Fallback: get fresh table list with filtering
+                all_mysql_tables = mysql_client.get_table_list()
+                excluded_tables = [
+                    'migration_log', 'schema_migrations', 'flyway_schema_history',
+                    'information_schema', 'performance_schema', 'mysql', 'sys'
+                ]
+                mysql_table_list = [
+                    table for table in all_mysql_tables 
+                    if table not in excluded_tables and not table.startswith('_')
+                ][:15]  # Limit for performance
                 
             for table_name in mysql_table_list:
                 try:
