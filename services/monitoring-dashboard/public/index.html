@@ -191,6 +191,13 @@
                             Table Migration Status
                         </h5>
                         <div class="d-flex gap-2">
+                            <select id="tableFilter" class="form-select form-select-sm" style="width: auto;" onchange="applyTableFilter()">
+                                <option value="all">All Tables</option>
+                                <option value="synced">Synced</option>
+                                <option value="unsynced">Not Synced</option>
+                                <option value="empty">Empty</option>
+                                <option value="errors">Errors</option>
+                            </select>
                             <select id="tablesPerPage" class="form-select form-select-sm" style="width: auto;" onchange="changeTablePageSize()">
                                 <option value="20" selected>20 per page</option>
                                 <option value="50">50 per page</option>
@@ -1164,33 +1171,63 @@
         }
         
         function renderTablePage() {
+            // Apply current filter
+            const filterSelect = document.getElementById('tableFilter');
+            const currentFilter = filterSelect ? filterSelect.value : 'all';
+            
+            let filteredTables = allTablesData;
+            
+            if (currentFilter === 'synced') {
+                filteredTables = allTablesData.filter(table => table.isSync && table.hasData);
+            } else if (currentFilter === 'unsynced') {
+                filteredTables = allTablesData.filter(table => !table.isSync && table.hasData);
+            } else if (currentFilter === 'empty') {
+                filteredTables = allTablesData.filter(table => !table.hasData);
+            } else if (currentFilter === 'errors') {
+                filteredTables = allTablesData.filter(table => table.mysqlCount === "ERROR" || table.postgresCount === "ERROR");
+            }
+            
             let currentTables;
             let totalPages;
             
             if (tablesPerPage === Infinity) {
-                // Show all tables
-                currentTables = allTablesData;
+                // Show all filtered tables
+                currentTables = filteredTables;
                 totalPages = 1;
             } else {
-                // Paginate tables
-                totalPages = Math.ceil(allTablesData.length / tablesPerPage);
+                // Paginate filtered tables
+                totalPages = Math.ceil(filteredTables.length / tablesPerPage);
                 const startIndex = (currentPage - 1) * tablesPerPage;
                 const endIndex = startIndex + tablesPerPage;
-                currentTables = allTablesData.slice(startIndex, endIndex);
+                currentTables = filteredTables.slice(startIndex, endIndex);
             }
             
             // Render main table
             renderMainTable(currentTables);
             
-            // Update pagination controls
-            updatePaginationControls(allTablesData.length, totalPages);
+            // Update pagination controls with filtered count
+            updatePaginationControls(filteredTables.length, totalPages);
         }
         
         function renderMainTable(tables) {
             const tbody = document.getElementById('tablesStatus');
             
             if (tables.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No tables found with current filter</td></tr>';
+                const filterSelect = document.getElementById('tableFilter');
+                const currentFilter = filterSelect ? filterSelect.value : 'all';
+                
+                let message = 'No tables found';
+                if (currentFilter === 'synced') {
+                    message = 'No synced tables found';
+                } else if (currentFilter === 'unsynced') {
+                    message = 'No unsynced tables found';
+                } else if (currentFilter === 'empty') {
+                    message = 'No empty tables found';
+                } else if (currentFilter === 'errors') {
+                    message = 'No tables with errors found';
+                }
+                
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">${message}</td></tr>`;
                 return;
             }
             
@@ -1417,6 +1454,25 @@
                 document.getElementById('deleteCount').textContent = '0';
                 document.getElementById('successRate').textContent = '100%';
             }
+        }
+
+        // Function to apply table filter
+        function applyTableFilter() {
+            const filter = document.getElementById('tableFilter').value;
+            let filteredTables = allTablesData;
+
+            if (filter === 'synced') {
+                filteredTables = allTablesData.filter(table => table.isSync && table.hasData);
+            } else if (filter === 'unsynced') {
+                filteredTables = allTablesData.filter(table => !table.isSync && table.hasData);
+            } else if (filter === 'empty') {
+                filteredTables = allTablesData.filter(table => table.hasData === false);
+            } else if (filter === 'errors') {
+                filteredTables = allTablesData.filter(table => table.mysqlCount === "ERROR" || table.postgresCount === "ERROR");
+            }
+
+            currentPage = 1; // Reset to first page when filtering
+            renderTablePage();
         }
 
 
