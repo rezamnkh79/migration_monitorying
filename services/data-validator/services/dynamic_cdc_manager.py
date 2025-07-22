@@ -101,7 +101,7 @@ class DynamicCDCManager:
                 time.sleep(10)
                 
                 # Verify connector status
-                self._verify_connector_status()
+                self._verify_dynamic_connector_status()
                 
                 logger.info("✅ Dynamic CDC connectors setup completed")
                 return True
@@ -149,49 +149,77 @@ class DynamicCDCManager:
             logger.warning(f"⚠️ Error cleaning up connectors: {str(e)}")
     
     def _create_dynamic_mysql_connector(self):
-        """Create a single MySQL source connector for all discovered tables"""
+        """Create working MySQL connector with user's proven configuration"""
         try:
-            # Build table include list dynamically
-            table_include_list = [f"{self.database_name}.{table}" for table in self.monitored_tables]
+            # Use the exact configuration that works
+            mysql_host = os.getenv('MYSQL_HOST', '46.245.77.98')
+            mysql_port = os.getenv('MYSQL_PORT', '3306')
+            mysql_user = os.getenv('MYSQL_USER', 'root')
+            mysql_password = os.getenv('MYSQL_PASSWORD', 'mauFJcuf5dhRMQrjj')
+            database_name = os.getenv('MYSQL_DATABASE', 'adtrace_db_stage')
             
-            # Generate unique server ID based on host
-            import hashlib
-            server_id = str(abs(hash(self.mysql_host)) % 10000000)
+            current_time = int(time.time())
+            server_id = str(current_time)[-7:]
             
+            logger.info(f"🔧 Creating WORKING real-time CDC connector...")
+            logger.info(f"🆔 Server ID: {server_id}")
+            
+            # THIS IS THE WORKING CONFIGURATION!
             mysql_connector_config = {
-                "name": "dynamic-mysql-source",
+                "name": "adtrace-migration-working",
                 "config": {
                     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
                     "tasks.max": "1",
-                    "database.hostname": self.mysql_host,
-                    "database.port": self.mysql_port,
-                    "database.user": self.mysql_user,
-                    "database.password": self.mysql_password,
+                    "database.hostname": mysql_host,
+                    "database.port": mysql_port,
+                    "database.user": mysql_user,
+                    "database.password": mysql_password,
                     "database.server.id": server_id,
-                    "database.server.name": f"dynamic_mysql_{server_id}",
-                    "database.include.list": self.database_name,
-                    "table.include.list": ",".join(table_include_list),
+                    "database.server.name": f"adtrace_{server_id}",
+                    "database.include.list": database_name,
+                    "table.include.list": f"{database_name}.buy_transaction",
                     "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
-                    "schema.history.internal.kafka.topic": f"schema-changes.dynamic.{server_id}",
+                    "schema.history.internal.kafka.topic": f"schema-history-working-{server_id}",
                     "include.schema.changes": "true",
-                    "topic.prefix": "dynamic",
-                    "snapshot.mode": "initial",
+                    
+                    # KEY CHANGE: Use schema_only snapshot + real-time monitoring  
+                    "snapshot.mode": "schema_only",  # Only capture schema, then monitor real changes
+                    "snapshot.locking.mode": "none",
+                    
+                    # Direct topic naming
+                    "topic.prefix": "adtrace_migration",
+                    
+                    # Use RegexRouter to route everything to single topic
                     "transforms": "route",
                     "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-                    "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
-                    "transforms.route.replacement": "$3",
+                    "transforms.route.regex": "adtrace_migration\\.(.*)",
+                    "transforms.route.replacement": "adtrace_migration",
+                    
+                    # Converter settings
                     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
                     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
                     "key.converter.schemas.enable": "false",
                     "value.converter.schemas.enable": "false",
+                    
+                    # Data type handling
                     "decimal.handling.mode": "string",
                     "time.precision.mode": "connect",
-                    "bigint.unsigned.handling.mode": "long"
+                    "bigint.unsigned.handling.mode": "long",
+                    "binary.handling.mode": "base64",
+                    "database.ssl.mode": "disabled",
+                    
+                    # IMPORTANT: Enable binlog monitoring
+                    "database.history.kafka.bootstrap.servers": "kafka:29092",
+                    "database.history.kafka.topic": f"schema-history-working-{server_id}",
+                    
+                    # Performance settings
+                    "max.batch.size": "1024",
+                    "max.queue.size": "4096",
+                    "poll.interval.ms": "1000"
                 }
             }
             
-            logger.info(f"📡 Creating MySQL connector for {self.mysql_host}:{self.mysql_port}/{self.database_name}")
-            logger.info(f"📊 Tables to monitor: {table_include_list}")
+            logger.info(f"📡 Creating WORKING MySQL connector for {mysql_host}:{mysql_port}/{database_name}")
             
             response = requests.post(
                 f"{self.connect_url}/connectors",
@@ -201,45 +229,44 @@ class DynamicCDCManager:
             )
             
             if response.status_code in [200, 201]:
-                logger.info("✅ Dynamic MySQL source connector created successfully")
+                logger.info("✅ WORKING MySQL source connector created successfully")
+                self.global_stats["connector_status"]["mysql"] = "running"
                 return True
             else:
-                logger.error(f"❌ Failed to create MySQL connector: {response.status_code} - {response.text}")
+                logger.error(f"❌ Failed to create WORKING MySQL connector: {response.status_code} - {response.text}")
+                self.global_stats["connector_status"]["mysql"] = "failed"
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error creating MySQL connector: {str(e)}")
+            logger.error(f"❌ Error creating WORKING MySQL connector: {str(e)}")
+            self.global_stats["connector_status"]["mysql"] = "error"
             return False
     
-    def _verify_connector_status(self):
-        """Verify connector status and log details"""
+    def _verify_dynamic_connector_status(self):
+        """Verify dynamic connector status"""
         try:
-            response = requests.get(f"{self.connect_url}/connectors/dynamic-mysql-source/status", timeout=10)
+            response = requests.get(f"{self.connect_url}/connectors/adtrace-migration-working/status", timeout=10)
             if response.status_code == 200:
                 status = response.json()
                 connector_state = status.get("connector", {}).get("state", "unknown")
-                tasks = status.get("tasks", [])
                 
-                logger.info(f"📊 Connector Status: {connector_state}")
-                
-                if tasks:
-                    for i, task in enumerate(tasks):
-                        task_state = task.get("state", "unknown")
-                        logger.info(f"📋 Task {i}: {task_state}")
-                        
-                        if task_state == "FAILED":
-                            logger.error(f"❌ Task {i} failed: {task.get('trace', 'No trace available')}")
+                logger.info(f"Dynamic Connector Status: {connector_state}")
                 
                 # Update global stats
                 self.global_stats["connector_status"]["mysql"] = connector_state
                 
-                return connector_state == "RUNNING"
-            else:
-                logger.error(f"❌ Failed to get connector status: {response.status_code}")
-                return False
+                tasks = status.get("tasks", [])
+                for i, task in enumerate(tasks):
+                    task_state = task.get("state", "unknown")
+                    logger.info(f"Dynamic Task {i}: {task_state}")
+                    
+                    if task_state == "FAILED":
+                        logger.error(f"Dynamic Task {i} failed: {task.get('trace', 'No trace')}")
                 
+                return connector_state == "RUNNING"
+            
         except Exception as e:
-            logger.error(f"❌ Error verifying connector status: {str(e)}")
+            logger.error(f"Error verifying dynamic connector: {str(e)}")
             return False
     
     def start_cdc_monitoring(self):

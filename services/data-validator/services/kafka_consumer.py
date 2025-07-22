@@ -17,62 +17,28 @@ class DebeziumKafkaConsumer:
         self.consumer = None
         self.running = False
         
-    def get_dynamic_topics(self) -> List[str]:
-        """Get dynamic list of topics to subscribe to"""
-        try:
-            # Get tables from data validator (which uses dynamic discovery)
-            if hasattr(self.data_validator, 'get_tables_to_sync'):
-                tables = self.data_validator.get_tables_to_sync()
-                if tables:
-                    logger.info(f"Using dynamic topic list: {len(tables)} tables")
-                    return tables
-            
-            # Fallback: get tables from monitoring service
-            if hasattr(self.monitoring_service, 'get_table_list'):
-                tables = self.monitoring_service.get_table_list()
-                if tables:
-                    logger.info(f"Using monitoring service topic list: {len(tables)} tables")
-                    return tables
-            
-            # Last resort: empty list - will be updated when tables are discovered
-            logger.warning("No dynamic tables found - will subscribe to all available topics")
-            return []
-            
-        except Exception as e:
-            logger.error(f"Failed to get dynamic topics: {str(e)}")
-            return []
-        
     def start_consuming(self):
-        """Start consuming Debezium CDC events from Kafka"""
+        """Start consuming CDC events from adtrace_migration topic"""
         try:
-            logger.info("Initializing Dynamic Kafka Consumer...")
+            logger.info("🚀 Starting AdTrace Migration CDC Consumer...")
             
-            # Get dynamic topics
-            dynamic_topics = self.get_dynamic_topics()
+            # Use the working adtrace_migration topic
+            topic_name = "adtrace_migration"
             
-            # Subscribe to dynamic table topics
             self.consumer = KafkaConsumer(
+                topic_name,
                 bootstrap_servers=self.bootstrap_servers,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 key_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 auto_offset_reset='latest',  # Start from latest messages
                 enable_auto_commit=True,
-                group_id='adtrace-migration-validator',  # Updated group ID
+                group_id='adtrace-migration-consumer',  # Updated group ID
                 session_timeout_ms=30000,
                 heartbeat_interval_ms=10000,
                 consumer_timeout_ms=1000  # Timeout for polling
             )
             
-            if dynamic_topics:
-                # Subscribe to discovered topics
-                self.consumer.subscribe(dynamic_topics)
-                logger.info(f"Debezium CDC Consumer started, listening for {len(dynamic_topics)} dynamic topics")
-                logger.info(f"📡 Sample topics: {dynamic_topics[:5]}{'...' if len(dynamic_topics) > 5 else ''}")
-            else:
-                # Subscribe to pattern to catch any new topics
-                self.consumer.subscribe(pattern='.*')
-                logger.info("Debezium CDC Consumer started with pattern subscription (will discover topics dynamically)")
-            
+            logger.info(f"✅ CDC Consumer connected to topic: {topic_name}")
             logger.info(f"📡 Bootstrap servers: {self.bootstrap_servers}")
             self.running = True
             
@@ -80,61 +46,37 @@ class DebeziumKafkaConsumer:
             message_count = 0
             last_log_time = datetime.now()
             
-            while self.running:
+            for message in self.consumer:
+                if not self.running:
+                    break
+                    
                 try:
-                    # Poll for messages with timeout
-                    message_batch = self.consumer.poll(timeout_ms=1000)
+                    message_count += 1
                     
-                    for topic_partition, messages in message_batch.items():
-                        topic = topic_partition.topic
-                        
-                        for message in messages:
-                            message_count += 1
-                            
-                            # Process the CDC event
-                            self.process_cdc_event_sync(message, topic)
-                            
-                            # Log progress every 50 messages
-                            if message_count % 50 == 0:
-                                logger.info(f"Processed {message_count} CDC messages. Latest from topic: {topic}")
-                            
-                            # Update topic subscription every 100 messages to catch new tables
-                            if message_count % 100 == 0:
-                                self.update_dynamic_subscription()
+                    # Log progress every 10 messages or 30 seconds
+                    current_time = datetime.now()
+                    time_diff = (current_time - last_log_time).total_seconds()
                     
-                    # Periodic subscription update (every 30 seconds)
-                    now = datetime.now()
-                    if (now - last_log_time).total_seconds() > 30:
-                        self.update_dynamic_subscription()
-                        last_log_time = now
-                        
+                    if message_count % 10 == 0 or time_diff >= 30:
+                        logger.info(f"📨 Processed {message_count} CDC messages from {topic_name}")
+                        last_log_time = current_time
+                    
+                    # Process the CDC message
+                    self.process_cdc_message(message, topic_name)
+                    
                 except Exception as e:
-                    if self.running:  # Only log if we're supposed to be running
-                        logger.error(f"Error consuming CDC messages: {str(e)}")
-                        
+                    logger.error(f"❌ Error processing message from {topic_name}: {str(e)}")
+                    continue
+                    
         except Exception as e:
-            logger.error(f"Failed to start Kafka Consumer: {str(e)}")
+            logger.error(f"❌ Error in CDC consumer: {str(e)}")
+            self.running = False
         finally:
             if self.consumer:
                 self.consumer.close()
-                
-    def update_dynamic_subscription(self):
-        """Update Kafka subscription with latest discovered tables"""
-        try:
-            if not self.consumer:
-                return
-                
-            new_topics = self.get_dynamic_topics()
-            if new_topics:
-                current_topics = self.consumer.subscription()
-                if set(new_topics) != current_topics:
-                    logger.info(f"Updating Kafka subscription: {len(new_topics)} topics")
-                    self.consumer.subscribe(new_topics)
-                    
-        except Exception as e:
-            logger.error(f"Failed to update dynamic subscription: {str(e)}")
+                logger.info("🔒 CDC Consumer closed")
     
-    def process_cdc_event_sync(self, message, topic):
+    def process_cdc_message(self, message, topic):
         """Process a single CDC event from Debezium (synchronous version)"""
         try:
             if not message.value:
