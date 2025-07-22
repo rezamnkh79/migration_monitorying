@@ -1,42 +1,55 @@
-# MySQL to PostgreSQL Migration System with Dynamic CDC
+# AdTrace MySQL to PostgreSQL Migration System
 
 ## Overview
 
-This project implements a comprehensive real-time migration monitoring system from MySQL to PostgreSQL using Change Data Capture (CDC) technology. The system automatically discovers database tables, monitors changes in real-time, and provides detailed migration statistics through a web dashboard.
+This project implements a comprehensive real-time migration monitoring system from MySQL to PostgreSQL using Change Data Capture (CDC) technology. The system automatically discovers database tables, monitors changes in real-time, and provides detailed migration statistics through a professional web dashboard.
+
+## Quick Start
+
+### 1. Start All Services
+
+```bash
+docker-compose up -d
+```
+
+### 2. Initialize the CDC System
+
+```bash
+curl -X POST http://localhost:8000/table-monitor/setup
+```
+
+### 3. Access the Dashboard
+
+- **Monitoring Dashboard**: http://localhost:3000
+- **API Documentation**: http://localhost:8000/docs
+- **Kafka UI**: http://localhost:8080
 
 ## System Architecture
 
 ### Core Components
 
-The system consists of several interconnected services that work together to provide real-time data migration monitoring:
-
 **Database Services:**
-- MySQL: Source database containing original data
-- PostgreSQL: Target database for migration
-- Redis: Cache and statistics storage
+- **MySQL**: Source database (supports both local and remote)
+- **PostgreSQL**: Target database for migration
+- **Redis**: Cache and statistics storage
 
 **Message Processing:**
-- Apache Kafka: Event streaming platform for CDC events
-- Zookeeper: Kafka coordination service
-- Kafka Connect: Debezium connector runtime environment
+- **Apache Kafka**: Event streaming platform for CDC events
+- **Zookeeper**: Kafka coordination service
+- **Kafka Connect**: Debezium connector runtime environment
 
 **Application Services:**
-- Data Validator: Python FastAPI service for CDC processing and validation
-- Monitoring Dashboard: Node.js web interface for real-time monitoring
-- Kafka UI: Web interface for Kafka topic management
+- **Data Validator**: Python FastAPI service for CDC processing and validation
+- **Monitoring Dashboard**: Professional Node.js web interface for real-time monitoring
+- **Kafka UI**: Web interface for Kafka topic management
 
 ## How Change Data Capture Works
 
 ### The CDC Flow Process
 
-Change Data Capture is the core technology that enables real-time detection of database changes. Here is how it works step by step:
-
-### Visual Flow Diagram
-
 ```
 ┌────────────────────────────┐
-│        You issue a         │ ← INSERT / UPDATE / DELETE
-│        SQL command         │
+│        SQL Command         │ ← INSERT / UPDATE / DELETE
 └────────────┬───────────────┘
              │
              ▼
@@ -60,229 +73,341 @@ Change Data Capture is the core technology that enables real-time detection of d
              ▼
 ┌────────────────────────────┐
 │        Kafka Topic         │ ← Publishes the JSON message
-│         "users"            │
+│      "adtrace_migration"   │
 └────────────┬───────────────┘
              │
              ▼
 ┌────────────────────────────┐
-│        Our Code            │ ← Consumes the Kafka message
-│        _process_cdc        │ ← Increments the counter, etc.
+│        Our System          │ ← Consumes the Kafka message
+│        Processes CDC       │ ← Updates statistics and sync status
 └────────────────────────────┘
 ```
-
-### Detailed Step-by-Step Process
-
-**Step 1: MySQL Binary Log Recording**
-When you execute any SQL operation (INSERT, UPDATE, DELETE) on MySQL, the database engine automatically writes these changes to binary log files called binlog. These files contain a complete record of all data modifications with precise timestamps and positions.
-
-**Step 2: Debezium Connector Reading**
-Debezium connector acts as a specialized binary log reader. It continuously monitors the MySQL binlog files and reads new entries as they are written. The connector maintains its current position in the binlog to ensure no events are missed.
-
-**Step 3: Event Transformation and Publishing**
-When Debezium detects a change in the binlog, it converts the raw binary data into structured JSON messages. These messages contain information about what operation occurred (insert/update/delete), which table was affected, the data before and after the change, and metadata about the source.
-
-**Step 4: Kafka Topic Distribution**
-The JSON messages are published to specific Kafka topics. Each database table gets its own topic, allowing for organized and scalable event processing. Kafka ensures reliable delivery and ordering of these events.
-
-**Step 5: Consumer Processing**
-Our application consumes these messages from Kafka topics and processes them to update statistics, validate data consistency, and maintain real-time sync status information.
-
-## Dynamic Table Discovery System
-
-### Traditional vs Dynamic Approach
-
-Traditional CDC systems require manual configuration of which tables to monitor through static configuration files. This project implements a dynamic discovery system that automatically detects and monitors all database tables without hardcoded configurations.
-
-### Discovery Process
-
-**Initial Discovery:**
-The system connects to MySQL and queries the information schema to get a complete list of all tables in the target database. System tables and temporary tables are automatically filtered out.
-
-**Continuous Monitoring:**
-Every 30 seconds, the system re-scans the database for new tables or removed tables. When changes are detected, the CDC connectors are automatically updated to include or exclude tables as needed.
-
-**Schema Awareness:**
-The system also tracks column information for each table, allowing it to detect schema changes and adapt accordingly.
-
-### Connector Management
-
-**Dynamic Connector Creation:**
-Instead of using static JSON configuration files, the system programmatically creates Debezium connectors through the Kafka Connect REST API. The table include list is built dynamically based on discovered tables.
-
-**Automatic Updates:**
-When new tables are detected, the system recreates the connector with an updated configuration that includes the new tables. This ensures all database changes are captured without manual intervention.
-
-## Services Detailed Architecture
-
-### Data Validator Service (Python FastAPI)
-
-This is the core service that handles CDC processing and data validation.
-
-**Key Components:**
-
-`services/data-validator/main.py`: Main application entry point that initializes all services and provides REST API endpoints.
-
-`services/data-validator/services/dynamic_table_monitor.py`: Core CDC management system that handles table discovery, connector management, and event processing.
-
-`services/data-validator/database/mysql_client.py`: MySQL database connection and query utilities.
-
-`services/data-validator/database/postgres_client.py`: PostgreSQL database connection and query utilities.
-
-`services/data-validator/services/data_validator.py`: Data consistency validation logic.
-
-`services/data-validator/services/monitoring.py`: System monitoring and metrics collection.
-
-**Key Functions:**
-
-Table Discovery: Automatically scans MySQL to find all monitorable tables.
-
-Connector Management: Creates and updates Debezium connectors dynamically.
-
-Event Processing: Consumes CDC events from Kafka and updates statistics.
-
-Data Validation: Compares data between MySQL and PostgreSQL to detect inconsistencies.
-
-API Endpoints: Provides REST APIs for status checking and system control.
-
-### Monitoring Dashboard Service (Node.js)
-
-Web-based interface for real-time monitoring of the migration process.
-
-**Key Files:**
-
-`services/monitoring-dashboard/server.js`: Express.js server that provides the web interface and WebSocket connections for real-time updates.
-
-`services/monitoring-dashboard/public/index.html`: Single-page application that displays migration statistics, table sync status, and CDC event counters.
-
-**Features:**
-
-Real-time table sync percentages showing how much data has been migrated for each table.
-
-CDC events counter that increments with each database change detected.
-
-Connector status indicators showing the health of MySQL and PostgreSQL connections.
-
-Latest records viewer for examining recent data in both databases.
-
-### Database Clients
-
-**MySQL Client:**
-Handles connections to the source MySQL database. Provides methods for querying table lists, counting records, retrieving data, and accessing table schemas.
-
-**PostgreSQL Client:**
-Manages connections to the target PostgreSQL database. Includes functionality for data insertion, updates, deletions, and migration logging.
-
-## Understanding CDC Events Counter
-
-### What the Counter Represents
-
-The CDC Events Processed counter displayed in the dashboard represents the total number of change events that have been detected and processed since the system started.
-
-### When the Counter Increases
-
-The counter increments by one for each of these operations:
-
-**INSERT Operations:** When new records are added to any monitored table.
-**UPDATE Operations:** When existing records are modified in any monitored table.  
-**DELETE Operations:** When records are removed from any monitored table.
-
-### Counter Reset Behavior
-
-The counter resets to zero when Docker containers are restarted because it is stored in application memory (RAM) rather than persistent storage. However, the actual CDC events are stored in Redis for historical tracking, so the event history is preserved even after restarts.
-
-### Event Processing Flow
-
-When a database change occurs:
-1. MySQL writes the change to its binary log
-2. Debezium reads the binary log and creates a JSON event
-3. The event is published to the appropriate Kafka topic
-4. Our consumer reads the event from Kafka
-5. The counter is incremented and sync statistics are updated
-
-## Sync Status Determination
-
-### Real-time Sync Calculation
-
-The system uses CDC events to trigger sync status updates. When an event is received:
-
-1. The system queries both MySQL and PostgreSQL to get current record counts
-2. Sync percentage is calculated as (PostgreSQL count / MySQL count) * 100
-3. The table status is updated with the new percentages and last operation type
-
-### Kafka Role in Sync Detection
-
-Kafka serves multiple critical functions beyond just event counting:
-
-**Event Streaming:** Delivers change events from Debezium to our processing system.
-**Real-time Triggers:** Each Kafka message triggers a sync status recalculation.
-**Operation Tracking:** Kafka messages contain operation types (insert/update/delete) for detailed statistics.
-**Historical Data:** Events are stored for audit trails and debugging.
-
-## API Endpoints
-
-### Core Endpoints
-
-`GET /health`: System health check with database connection status.
-`GET /metrics`: Detailed migration statistics and table sync percentages.
-`GET /table-monitor/status`: Comprehensive CDC system status.
-`GET /discover-tables`: Manual table discovery trigger.
-
-### Control Endpoints
-
-`POST /table-monitor/setup`: Initialize dynamic table monitoring.
-`POST /table-monitor/add-table/{table_name}`: Manually add a table to monitoring.
-
-### Legacy Endpoints
-
-`GET /cdc/status`: Legacy CDC status (redirects to table-monitor).
-`POST /cdc/setup-dynamic`: Legacy setup (redirects to table-monitor).
 
 ## Configuration
 
 ### Environment Variables
 
-The system uses environment variables for database connections:
+Create a `.env` file with your database credentials:
 
-```
-MYSQL_HOST=mysql
-MYSQL_USER=debezium
-MYSQL_PASSWORD=dbz
-MYSQL_DATABASE=inventory
+```bash
+# Remote MySQL Configuration (AdTrace Production)
+MYSQL_HOST=46.245.77.98
+MYSQL_USER=root
+MYSQL_PASSWORD=mauFJcuf5dhRMQrjj
+MYSQL_DATABASE=adtrace_db_stage
+MYSQL_PORT=3306
+
+# Local PostgreSQL
 POSTGRES_HOST=postgres
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 POSTGRES_DATABASE=inventory
+POSTGRES_PORT=5432
+
+# Local Services
 REDIS_HOST=redis
+REDIS_PORT=6380
+KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+MONITORING_PORT=3000
+VALIDATOR_PORT=8000
+LOG_LEVEL=INFO
 ```
 
-### Discovery Settings
+### MySQL Requirements
 
-Table discovery runs every 30 seconds by default. System tables, temporary tables, and backup tables are automatically excluded from monitoring.
+Your MySQL server must have the following configuration:
 
-## Deployment
+```sql
+-- Check binlog status
+SHOW VARIABLES LIKE 'log_bin';
+SHOW VARIABLES LIKE 'binlog_format';
+SHOW VARIABLES LIKE 'server_id';
+```
 
-The entire system runs in Docker containers orchestrated by Docker Compose. The main docker-compose.yml file defines all services and their interconnections.
+If binlog is not enabled, add to MySQL configuration:
 
-### Starting the System
+```ini
+[mysqld]
+server-id = 223344
+log-bin = mysql-bin
+binlog-format = ROW
+binlog-row-image = FULL
+expire_logs_days = 10
+```
+
+### MySQL User Permissions
+
+The MySQL user needs these permissions:
+
+```sql
+GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'your_user'@'%';
+GRANT ALL PRIVILEGES ON your_database.* TO 'your_user'@'%';
+FLUSH PRIVILEGES;
+```
+
+## Migration Status
+
+### ✅ Complete Schema Migration
+
+All 70+ AdTrace tables have been successfully migrated to PostgreSQL:
+
+| Category | Tables | Status |
+|----------|--------|---------|
+| **AdTrace Core** | 17 tables | ✅ Complete |
+| **Django Framework** | 8 tables | ✅ Complete |
+| **Authentication** | 5 tables | ✅ Complete |
+| **Business Logic** | 25+ tables | ✅ Complete |
+| **Financial** | 10+ tables | ✅ Complete |
+| **Supporting** | 15+ tables | ✅ Complete |
+| **TOTAL** | **70+ tables** | ✅ **100% Complete** |
+
+### Key AdTrace Tables Migrated
+
+- `adtrace_tracker` ✅
+- `adtrace_transaction` ✅
+- `adtrace_mobile_app` ✅
+- `adtrace_event_type` ✅
+- `buy_transaction` ✅
+- `mobile_app_detail` ✅
+- `business_profile` ✅
+- `invoice`, `wallet` ✅
+- And 60+ more...
+
+## API Endpoints
+
+### Health & Status
 
 ```bash
-  docker-compose up --build -d
+# System health check
+curl http://localhost:8000/health
+
+# Detailed metrics and sync status
+curl http://localhost:8000/metrics
+
+# CDC connector status
+curl http://localhost:8000/debezium/status
+
+# Table monitoring status
+curl http://localhost:8000/table-monitor/status
 ```
 
-### Accessing Services
+### Data Operations
 
-- Web Dashboard: http://localhost:3000
-- API Documentation: http://localhost:8000
-- Kafka UI: http://localhost:8080
+```bash
+# Get latest records from a table
+curl http://localhost:8000/latest-records/buy_transaction
 
-## Data Flow Summary
+# Trigger data validation
+curl -X POST http://localhost:8000/validate -H "Content-Type: application/json" -d '{"full_validation": true}'
 
-1. User modifies data in MySQL database
+# Manual sync check
+curl -X POST http://localhost:8000/sync-check
+```
+
+### Table Management
+
+```bash
+# Discover all database tables
+curl http://localhost:8000/discover-tables
+
+# Setup table monitoring
+curl -X POST http://localhost:8000/table-monitor/setup
+
+# Add specific table to monitoring
+curl -X POST http://localhost:8000/table-monitor/add-table/new_table_name
+```
+
+## Testing the System
+
+### Add Test Data to MySQL
+
+```bash
+# Insert test data
+mysql -h 46.245.77.98 -u root -p adtrace_db_stage -e "
+INSERT INTO buy_transaction (account_id, user_id, wallet_id, amount, creation_time, last_update_time, is_deleted) 
+VALUES (999, 999, 1, '100.00', NOW(), NOW(), 0);"
+
+# Update existing data
+mysql -h 46.245.77.98 -u root -p adtrace_db_stage -e "
+UPDATE buy_transaction SET amount = amount * 1.1 WHERE account_id = 999;"
+
+# Delete test data
+mysql -h 46.245.77.98 -u root -p adtrace_db_stage -e "
+DELETE FROM buy_transaction WHERE account_id = 999;"
+```
+
+### Monitor CDC Events
+
+```bash
+# View Kafka topics
+docker exec kafka kafka-topics --bootstrap-server kafka:29092 --list
+
+# Monitor the main migration topic
+docker exec kafka kafka-console-consumer --bootstrap-server kafka:29092 --topic adtrace_migration --from-beginning
+
+# Check system metrics
+curl http://localhost:8000/metrics | jq '.cdc_stats'
+```
+
+## Dashboard Features
+
+The professional monitoring dashboard at http://localhost:3000 provides:
+
+- **Real-time Statistics**: Live CDC event counts and sync percentages
+- **Table Overview**: Complete list of all tables with sync status
+- **Filtering**: Filter tables by sync status (All, Synced, Not Synced, Empty, Errors)
+- **Pagination**: View 10, 20, 40, 50 tables per page or show all
+- **Connector Status**: Real-time status of MySQL and PostgreSQL connectors
+- **Latest Records**: View and compare latest records from both databases
+- **Professional UI**: Modern glass morphism design with gradients and animations
+
+## Troubleshooting
+
+### CDC Connector Issues
+
+```bash
+# Check connector status
+curl http://localhost:8083/connectors/adtrace-migration-working/status
+
+# Restart connector
+curl -X POST http://localhost:8083/connectors/adtrace-migration-working/restart
+
+# View connector logs
+docker logs connect
+
+# Recreate connector
+curl -X DELETE http://localhost:8083/connectors/adtrace-migration-working
+curl -X POST http://localhost:8000/table-monitor/setup
+```
+
+### Database Connection Issues
+
+```bash
+# Test MySQL connection
+mysql -h 46.245.77.98 -u root -p adtrace_db_stage -e "SELECT 1;"
+
+# Test PostgreSQL connection
+docker exec postgres psql -U postgres -d inventory -c "SELECT 1;"
+
+# Check MySQL binlog
+mysql -h 46.245.77.98 -u root -p -e "SHOW VARIABLES LIKE 'log_bin';"
+```
+
+### Performance Issues
+
+```bash
+# Check Docker stats
+docker stats
+
+# Monitor Kafka consumer lag
+docker exec kafka kafka-consumer-groups --bootstrap-server kafka:29092 --describe --group adtrace-migration-consumer
+
+# Check Redis memory
+docker exec redis redis-cli info memory
+```
+
+### Reset System
+
+```bash
+# Stop all services
+docker-compose down
+
+# Complete cleanup (removes all data)
+docker-compose down -v
+docker system prune -f
+
+# Fresh start
+docker-compose up -d
+curl -X POST http://localhost:8000/table-monitor/setup
+```
+
+## System Monitoring
+
+### Key Metrics to Watch
+
+1. **CDC Events Processed**: Total number of database changes captured
+2. **Table Sync Percentages**: How much data has been synchronized for each table
+3. **Connector Health**: Status of MySQL and PostgreSQL connectors
+4. **Operation Counts**: Number of INSERT, UPDATE, DELETE operations
+
+### Log Monitoring
+
+```bash
+# Follow all logs
+docker-compose logs -f --tail=100
+
+# Specific service logs
+docker-compose logs -f data-validator
+docker-compose logs -f connect
+docker-compose logs -f monitoring-dashboard
+```
+
+## Advanced Features
+
+### Dynamic Table Discovery
+
+The system automatically:
+- Scans MySQL every 30 seconds for new tables
+- Excludes system tables and temporary tables
+- Updates CDC connectors dynamically
+- No manual configuration required
+
+### Single Topic Routing
+
+All CDC events are routed to one Kafka topic (`adtrace_migration`) for simplified processing and monitoring.
+
+### Real-time Dashboard Updates
+
+The dashboard uses WebSocket connections for real-time updates without page refresh.
+
+### Professional UI Design
+
+- Glass morphism effects with backdrop blur
+- Gradient backgrounds and modern styling
+- Smooth animations and hover effects
+- Responsive design for all screen sizes
+
+## Architecture Details
+
+### Services Communication
+
+1. **MySQL** → **Debezium** → **Kafka** → **Data Validator**
+2. **Data Validator** ↔ **PostgreSQL** (for validation)
+3. **Data Validator** ↔ **Redis** (for statistics)
+4. **Data Validator** ↔ **Dashboard** (via WebSocket)
+
+### Data Flow
+
+1. User modifies data in MySQL
 2. MySQL writes change to binary log
-3. Debezium connector reads binary log
-4. Change event is published to Kafka topic
-5. Python consumer processes the event
-6. Sync statistics are updated in real-time
-7. Dashboard displays current status
+3. Debezium reads binlog and creates JSON event
+4. Event published to `adtrace_migration` Kafka topic
+5. Data Validator consumes event and updates statistics
+6. Dashboard displays real-time updates
+7. PostgreSQL sync status calculated on demand
 
-This architecture ensures that any change in MySQL is immediately detected, processed, and reflected in the monitoring system without requiring manual configuration or intervention.
+## Security Considerations
+
+1. **Strong Passwords**: Use strong passwords for all databases
+2. **Network Security**: Restrict MySQL access to specific IPs
+3. **SSL/TLS**: Use encrypted connections in production
+4. **User Permissions**: Grant minimal required permissions
+
+## Performance Optimization
+
+1. **Batch Processing**: Configure appropriate batch sizes
+2. **Consumer Threads**: Adjust consumer thread counts
+3. **Network Latency**: Monitor network performance for remote MySQL
+4. **Disk Space**: Monitor binlog disk usage
+5. **Memory Usage**: Monitor Redis and Kafka memory consumption
+
+## Support
+
+For issues and questions:
+
+1. Check the dashboard at http://localhost:3000
+2. Review API documentation at http://localhost:8000/docs
+3. Monitor logs with `docker-compose logs -f`
+4. Check connector status with provided API endpoints
+
+This system provides a complete, professional-grade solution for MySQL to PostgreSQL migration with real-time monitoring and comprehensive CDC capabilities.
