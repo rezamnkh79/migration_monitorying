@@ -34,23 +34,23 @@ services:
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: localhost
 
-#   MySQL Source Database (External - Using remote MySQL)
-#  mysql:
-#     image: mysql:8.0
-#     hostname: mysql
-#     container_name: mysql
-#     ports:
-#       - "${MYSQL_PORT:-3307}:3306"
-#     environment:
-#       MYSQL_ROOT_PASSWORD: debezium
-#       MYSQL_USER: debezium
-#       MYSQL_PASSWORD: dbz
-#       MYSQL_DATABASE: ${MYSQL_DATABASE:-inventory}
-#     volumes:
-#       - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
-#       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
-#       - mysql_data:/var/lib/mysql
-#     command: --server-id=223344 --log-bin=mysql-bin --binlog-format=ROW --binlog-row-image=FULL --expire-logs-days=10
+  #   MySQL Source Database (External - Using remote MySQL)
+  #  mysql:
+  #     image: mysql:8.0
+  #     hostname: mysql
+  #     container_name: mysql
+  #     ports:
+  #       - "${MYSQL_PORT:-3307}:3306"
+  #     environment:
+  #       MYSQL_ROOT_PASSWORD: debezium
+  #       MYSQL_USER: debezium
+  #       MYSQL_PASSWORD: dbz
+  #       MYSQL_DATABASE: ${MYSQL_DATABASE:-inventory}
+  #     volumes:
+  #       - ./mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+  #       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+  #       - mysql_data:/var/lib/mysql
+  #     command: --server-id=223344 --log-bin=mysql-bin --binlog-format=ROW --binlog-row-image=FULL --expire-logs-days=10
 
   # PostgreSQL Target Database
   postgres:
@@ -133,27 +133,10 @@ services:
       dockerfile: Dockerfile
     hostname: data-validator
     container_name: data-validator
-    depends_on:
-      - postgres
-      - redis
-      - kafka
     ports:
       - "${VALIDATOR_PORT:-8000}:8000"
-    environment:
-      MYSQL_HOST: ${MYSQL_HOST}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_PORT: ${MYSQL_PORT}
-      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-inventory}
-      POSTGRES_PORT: 5432
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: 6379
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
     volumes:
       - ./logs:/app/logs
 
@@ -164,25 +147,10 @@ services:
       dockerfile: Dockerfile
     hostname: monitoring-dashboard
     container_name: monitoring-dashboard
-    depends_on:
-      - redis
-      - postgres
     ports:
       - "${MONITORING_PORT:-3000}:3000"
-    environment:
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: 6379
-      MYSQL_HOST: ${MYSQL_HOST}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_PORT: ${MYSQL_PORT}
-      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-inventory}
-      POSTGRES_PORT: 5432
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
 
 volumes:
   postgres_data:
