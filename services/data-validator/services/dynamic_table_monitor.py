@@ -32,7 +32,8 @@ class DynamicTableMonitor:
         self.global_stats = global_stats
         
         # Configuration - Get from environment variables
-        self.kafka_bootstrap_servers = ['kafka:29092']
+        kafka_bootstrap = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
+        self.kafka_bootstrap_servers = kafka_bootstrap.split(',')
         self.connect_url = "http://connect:8083"
         self.database_name = self._get_database_name()
         
@@ -74,10 +75,10 @@ class DynamicTableMonitor:
                         return db_name
             
             # Fallback to environment variable
-            return os.getenv('MYSQL_DATABASE', 'inventory')
+            return os.getenv('MYSQL_DATABASE', 'adtrace_db_stage')
         except Exception as e:
             logger.warning(f"Could not detect database name: {e}")
-            return 'inventory'
+            return 'adtrace_db_stage'
     
     def start_monitoring(self):
         """Start comprehensive table monitoring"""
@@ -379,7 +380,7 @@ class DynamicTableMonitor:
                     "database.server.name": f"adtrace_{server_id}",
                     "database.include.list": database_name,
                     "table.include.list": f"{database_name}.buy_transaction",
-                    "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+                    "schema.history.internal.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
                     "schema.history.internal.kafka.topic": f"schema-history-working-{server_id}",
                     "include.schema.changes": "true",
                     
@@ -410,7 +411,7 @@ class DynamicTableMonitor:
                     "database.ssl.mode": "disabled",
                     
                     # IMPORTANT: Enable binlog monitoring
-                    "database.history.kafka.bootstrap.servers": "kafka:29092",
+                    "database.history.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
                     "database.history.kafka.topic": f"schema-history-working-{server_id}",
                     
                     # Performance settings

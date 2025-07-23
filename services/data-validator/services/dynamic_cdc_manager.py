@@ -31,7 +31,8 @@ class DynamicCDCManager:
         self.global_stats = global_stats
         
         # Configuration - Get from environment variables
-        self.kafka_bootstrap_servers = ['kafka:29092']
+        kafka_bootstrap = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
+        self.kafka_bootstrap_servers = kafka_bootstrap.split(',')
         self.connect_url = "http://connect:8083"
         
         # MySQL connection settings from environment
@@ -178,7 +179,7 @@ class DynamicCDCManager:
                     "database.server.name": f"adtrace_{server_id}",
                     "database.include.list": database_name,
                     "table.include.list": f"{database_name}.buy_transaction",
-                    "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+                    "schema.history.internal.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
                     "schema.history.internal.kafka.topic": f"schema-history-working-{server_id}",
                     "include.schema.changes": "true",
                     
@@ -209,7 +210,7 @@ class DynamicCDCManager:
                     "database.ssl.mode": "disabled",
                     
                     # IMPORTANT: Enable binlog monitoring
-                    "database.history.kafka.bootstrap.servers": "kafka:29092",
+                    "database.history.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
                     "database.history.kafka.topic": f"schema-history-working-{server_id}",
                     
                     # Performance settings

@@ -26,7 +26,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const config = {
   redis: {
     host: process.env.REDIS_HOST || 'redis',
-    port: 6379
+    port: parseInt(process.env.REDIS_PORT) || 6379
   },
   mysql: {
     host: process.env.MYSQL_HOST || 'mysql',

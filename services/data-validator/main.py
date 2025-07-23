@@ -14,6 +14,7 @@ from kafka import KafkaConsumer, TopicPartition
 import schedule
 import time
 import threading
+import os
 
 from database.mysql_client import MySQLClient
 from database.postgres_client import PostgreSQLClient
@@ -83,7 +84,9 @@ async def startup_event():
         
         # Initialize Redis client
         logger.info("Connecting to Redis...")
-        redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+        redis_host = os.getenv('REDIS_HOST', 'redis')
+        redis_port = int(os.getenv('REDIS_PORT', '6379'))
+        redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
         
         # Test connections
         mysql_status = mysql_client.test_connection()
