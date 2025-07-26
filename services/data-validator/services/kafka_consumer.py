@@ -20,7 +20,7 @@ class DebeziumKafkaConsumer:
     def start_consuming(self):
         """Start consuming CDC events from adtrace_migration topic"""
         try:
-            logger.info("🚀 Starting AdTrace Migration CDC Consumer...")
+            logger.info("Starting AdTrace Migration CDC Consumer...")
             
             # Use the working adtrace_migration topic
             topic_name = "adtrace_migration"
@@ -38,8 +38,8 @@ class DebeziumKafkaConsumer:
                 consumer_timeout_ms=1000  # Timeout for polling
             )
             
-            logger.info(f"✅ CDC Consumer connected to topic: {topic_name}")
-            logger.info(f"📡 Bootstrap servers: {self.bootstrap_servers}")
+            logger.info(f"CDC Consumer connected to topic: {topic_name}")
+            logger.info(f"Bootstrap servers: {self.bootstrap_servers}")
             self.running = True
             
             # Start consuming messages
@@ -58,23 +58,23 @@ class DebeziumKafkaConsumer:
                     time_diff = (current_time - last_log_time).total_seconds()
                     
                     if message_count % 10 == 0 or time_diff >= 30:
-                        logger.info(f"📨 Processed {message_count} CDC messages from {topic_name}")
+                        logger.info(f"Processed {message_count} CDC messages from {topic_name}")
                         last_log_time = current_time
                     
                     # Process the CDC message
                     self.process_cdc_message(message, topic_name)
                     
                 except Exception as e:
-                    logger.error(f"❌ Error processing message from {topic_name}: {str(e)}")
+                    logger.error(f"Error processing message from {topic_name}: {str(e)}")
                     continue
                     
         except Exception as e:
-            logger.error(f"❌ Error in CDC consumer: {str(e)}")
+            logger.error(f"Error in CDC consumer: {str(e)}")
             self.running = False
         finally:
             if self.consumer:
                 self.consumer.close()
-                logger.info("🔒 CDC Consumer closed")
+                logger.info("CDC Consumer closed")
     
     def process_cdc_message(self, message, topic):
         """Process a single CDC event from Debezium (synchronous version)"""

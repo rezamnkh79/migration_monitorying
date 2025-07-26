@@ -43,6 +43,12 @@ app.add_middleware(
 )
 
 # Global instances
+
+# Configuration helper functions
+def get_kafka_connect_url():
+    """Get Kafka Connect URL from environment variables"""
+    return os.getenv("KAFKA_CONNECT_URL", "http://connect:8083")
+
 mysql_client = None
 postgres_client = None
 redis_client = None
@@ -249,7 +255,7 @@ def update_connector_status():
         
         # Check Dynamic MySQL source connector
         try:
-            response = requests.get("http://connect:8083/connectors/dynamic-mysql-source/status", timeout=5)
+            response = requests.get(f"{get_kafka_connect_url()}/connectors/dynamic-mysql-source/status", timeout=5)
             if response.status_code == 200:
                 status = response.json()
                 connector_state = status.get("connector", {}).get("state", "unknown")
@@ -351,12 +357,12 @@ async def get_debezium_status():
         
         # Get current active connectors
         try:
-            response = requests.get("http://connect:8083/connectors", timeout=5)
+            response = requests.get(f"{get_kafka_connect_url()}/connectors", timeout=5)
             if response.status_code == 200:
                 connector_list = response.json()
                 
                 for connector in connector_list:
-                    status_response = requests.get(f"http://connect:8083/connectors/{connector}/status", timeout=5)
+                    status_response = requests.get(f"{get_kafka_connect_url()}/connectors/{connector}/status", timeout=5)
                     if status_response.status_code == 200:
                         connectors[connector] = status_response.json()
         except Exception as e:
@@ -1015,10 +1021,11 @@ async def discover_tables():
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
+    # for change this should change EXPORT Dockerfile and docker-compose :9000
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=9000,
         reload=False,
         log_level="info"
     ) 

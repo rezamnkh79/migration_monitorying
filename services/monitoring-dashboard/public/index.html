@@ -1100,7 +1100,7 @@
             contentDiv.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Checking sync status...</div>';
             
             try {
-                const response = await fetch('http://localhost:8000/sync-check', {
+                const response = await fetch("/api/sync-check", {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -1140,7 +1140,7 @@
         async function checkDebeziumStatus() {
             try {
                 // First check the specific connector status
-                const connectorResponse = await fetch('http://localhost:8083/connectors/adtrace-migration-working/status', {
+                const connectorResponse = await fetch('/api/connector-status/adtrace-migration-working', {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -1157,7 +1157,7 @@
                 }
                 
                 // Also get full debezium status
-                const response = await fetch('http://localhost:8000/debezium/status', {
+                const response = await fetch("/api/debezium/status", {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -1369,7 +1369,7 @@
             showNotification('Fetching real data from databases...', 'info');
             
             // Use the sync-check endpoint to get real data
-            fetch('http://localhost:8000/sync-check', {
+            fetch("/api/sync-check", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1687,7 +1687,7 @@
         async function updateServiceStatusCards() {
             try {
                 // Check all services status using the correct health endpoint
-                const response = await fetch('http://localhost:8000/health', {
+                const response = await fetch("/api/health", {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -1736,7 +1736,7 @@
         async function refreshSyncStatistics() {
             try {
                 // Get latest metrics which include sync stats
-                const response = await fetch('http://localhost:8000/metrics', {
+                const response = await fetch("/api/metrics", {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -1755,7 +1755,7 @@
                     
                 } else {
                     // Fallback: try to get stats from kafka status endpoint
-                    const fallbackResponse = await fetch('http://localhost:8000/kafka-status', {
+                    const fallbackResponse = await fetch("/api/kafka-status", {
                         method: 'GET',
                         headers: { 'Content-Type': 'application/json' }
                     });

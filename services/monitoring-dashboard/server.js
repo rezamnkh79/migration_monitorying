@@ -43,7 +43,7 @@ const config = {
     port: parseInt(process.env.POSTGRES_PORT) || 5432
   },
   validator: {
-    url: 'http://data-validator:8000'
+    url: process.env.VALIDATOR_URL || 'http://data-validator:8000'
   }
 };
 
@@ -140,6 +140,54 @@ app.get('/api/kafka-status', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error getting Kafka status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/sync-check', async (req, res) => {
+  try {
+    const response = await axios.post(`${config.validator.url}/sync-check`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error performing sync check:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/health', async (req, res) => {
+  try {
+    const response = await axios.get(`${config.validator.url}/health`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error getting health status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/debezium/status', async (req, res) => {
+  try {
+    const response = await axios.get(`${config.validator.url}/debezium/status`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error getting debezium status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/connector-status/:connectorName', async (req, res) => {
+  try {
+    const { connectorName } = req.params;
+    // Since data-validator doesn't have this endpoint, we'll get it from debezium/status
+    const response = await axios.get(`${config.validator.url}/debezium/status`);
+    const connectors = response.data.active_connectors || {};
+    
+    if (connectors[connectorName]) {
+      res.json(connectors[connectorName]);
+    } else {
+      res.status(404).json({ error: `Connector ${connectorName} not found` });
+    }
+  } catch (error) {
+    console.error('Error getting connector status:', error);
     res.status(500).json({ error: error.message });
   }
 });

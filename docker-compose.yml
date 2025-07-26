@@ -109,12 +109,12 @@ services:
     depends_on:
       - kafka
     ports:
-      - "8080:8080"
+      - "${KAFKA_UI_PORT:-8080}:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
-      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: ${KAFKA_CONNECT_URL:-http://connect:8083}
 
   # Redis for caching and monitoring
   redis:
@@ -134,7 +134,7 @@ services:
     hostname: data-validator
     container_name: data-validator
     ports:
-      - "${VALIDATOR_PORT:-8000}:8000"
+      - "${VALIDATOR_PORT:-9000}:9000"
     env_file:
       - .env
     volumes:

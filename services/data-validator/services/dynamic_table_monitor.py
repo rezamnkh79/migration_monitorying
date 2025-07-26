@@ -34,7 +34,7 @@ class DynamicTableMonitor:
         # Configuration - Get from environment variables
         kafka_bootstrap = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
         self.kafka_bootstrap_servers = kafka_bootstrap.split(',')
-        self.connect_url = "http://connect:8083"
+        self.connect_url = os.getenv("KAFKA_CONNECT_URL", "http://connect:8083")
         self.database_name = self._get_database_name()
         
         # MySQL connection settings from environment
@@ -43,7 +43,7 @@ class DynamicTableMonitor:
         self.mysql_user = os.getenv('MYSQL_USER', 'debezium')
         self.mysql_password = os.getenv('MYSQL_PASSWORD', 'dbz')
         
-        logger.info(f"🔧 Table Monitor initialized for MySQL: {self.mysql_host}:{self.mysql_port}/{self.database_name}")
+        logger.info(f"Table Monitor initialized for MySQL: {self.mysql_host}:{self.mysql_port}/{self.database_name}")
         
         # Dynamic monitoring state
         self.current_tables: Set[str] = set()
@@ -75,10 +75,10 @@ class DynamicTableMonitor:
                         return db_name
             
             # Fallback to environment variable
-            return os.getenv('MYSQL_DATABASE', 'adtrace_db_stage')
+            return os.getenv('MYSQL_DATABASE', 'inventory')
         except Exception as e:
             logger.warning(f"Could not detect database name: {e}")
-            return 'adtrace_db_stage'
+            return 'inventory'
     
     def start_monitoring(self):
         """Start comprehensive table monitoring"""
@@ -354,17 +354,17 @@ class DynamicTableMonitor:
         """Create the working connector using the user's proven configuration"""
         try:
             # Use the exact configuration that works
-            mysql_host = os.getenv('MYSQL_HOST', '46.245.77.98')
+            mysql_host = os.getenv('MYSQL_HOST', 'mysql')
             mysql_port = os.getenv('MYSQL_PORT', '3306')
             mysql_user = os.getenv('MYSQL_USER', 'root')
-            mysql_password = os.getenv('MYSQL_PASSWORD', 'mauFJcuf5dhRMQrjj')
-            database_name = os.getenv('MYSQL_DATABASE', 'adtrace_db_stage')
+            mysql_password = os.getenv('MYSQL_PASSWORD', 'password')
+            database_name = os.getenv('MYSQL_DATABASE', 'inventory')
             
             current_time = int(time.time())
             server_id = str(current_time)[-7:]
             
-            logger.info(f"🔧 Creating WORKING real-time CDC connector...")
-            logger.info(f"🆔 Server ID: {server_id}")
+            logger.info(f"Creating WORKING real-time CDC connector...")
+            logger.info(f"Server ID: {server_id}")
             
             # THIS IS THE WORKING CONFIGURATION!
             connector_config = {
@@ -421,7 +421,7 @@ class DynamicTableMonitor:
                 }
             }
             
-            logger.info(f"📡 Creating WORKING MySQL connector for {mysql_host}:{mysql_port}/{database_name}")
+            logger.info(f"Creating WORKING MySQL connector for {mysql_host}:{mysql_port}/{database_name}")
             
             response = requests.post(
                 f"{self.connect_url}/connectors",
@@ -431,16 +431,16 @@ class DynamicTableMonitor:
             )
             
             if response.status_code in [200, 201]:
-                logger.info("✅ WORKING CDC connector created successfully")
+                logger.info("WORKING CDC connector created successfully")
                 self.global_stats["connector_status"]["mysql"] = "running"
                 return True
             else:
-                logger.error(f"❌ Failed to create WORKING connector: {response.status_code} - {response.text}")
+                logger.error(f"Failed to create WORKING connector: {response.status_code} - {response.text}")
                 self.global_stats["connector_status"]["mysql"] = "failed"
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error creating WORKING connector: {str(e)}")
+            logger.error(f"Error creating WORKING connector: {str(e)}")
             self.global_stats["connector_status"]["mysql"] = "error"
             return False
     
@@ -506,7 +506,7 @@ class DynamicTableMonitor:
                 logger.warning("CDC monitoring already running")
                 return
             
-            logger.info("🚀 Starting AdTrace Migration CDC monitoring...")
+            logger.info("Starting AdTrace Migration CDC monitoring...")
             
             self.consumer = KafkaConsumer(
                 "adtrace_migration",  # Use the working single topic
@@ -526,7 +526,7 @@ class DynamicTableMonitor:
             self.consumer_thread = threading.Thread(target=self._consume_cdc_events, daemon=True)
             self.consumer_thread.start()
             
-            logger.info("✅ AdTrace Migration CDC monitoring started")
+            logger.info("AdTrace Migration CDC monitoring started")
             
         except Exception as e:
             logger.error(f"Failed to start CDC monitoring: {str(e)}")
