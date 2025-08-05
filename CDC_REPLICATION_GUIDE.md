@@ -1,91 +1,91 @@
-# راهنمای سیستم CDC Replication
+# CDC Replication System Guide
 
-## معرفی قابلیت جدید
+## New Feature Introduction
 
-به سیستم migration یک قابلیت جدید اضافه شده که **تغییرات MySQL را به صورت خودکار روی PostgreSQL اعمال می‌کند**.
+A new feature has been added to the migration system that **automatically applies MySQL changes to PostgreSQL**.
 
-### ویژگی‌های کلیدی:
+### Key Features:
 
-✅ **اعمال خودکار تغییرات**: هر INSERT/UPDATE/DELETE در MySQL بلافاصله روی PostgreSQL اعمال می‌شود  
-✅ **حفظ کدهای قبلی**: هیچ کد قبلی تغییر نکرده و سیستم قبلی کماکان کار می‌کند  
-✅ **مانیتورینگ کامل**: آمار کامل از تعداد عملیات موفق و ناموفق  
-✅ **مدیریت خطا**: در صورت خطا، سیستم ادامه کار می‌دهد  
-✅ **Performance بالا**: کار موازی با سیستم monitoring قبلی  
+**Automatic Change Application**: Every INSERT/UPDATE/DELETE in MySQL is immediately applied to PostgreSQL  
+**Preserve Existing Code**: No previous code has been changed and the existing system continues to work  
+**Complete Monitoring**: Complete statistics of successful and failed operations  
+**Error Management**: In case of error, the system continues to work  
+**High Performance**: Works in parallel with the previous monitoring system
 
-## چگونگی کار
+## How It Works
 
-### 1. فلوی عملیات
+### 1. Operation Flow
 
 ```
 MySQL Change → Debezium → Kafka → CDC Consumer → CDC Replicator → PostgreSQL
 ```
 
-### 2. نوع عملیات پشتیبانی شده
+### 2. Supported Operation Types
 
-- **INSERT**: رکورد جدید در PostgreSQL اضافه می‌شود
-- **UPDATE**: رکورد موجود در PostgreSQL آپدیت می‌شود
-- **DELETE**: رکورد از PostgreSQL حذف می‌شود
+- **INSERT**: New record is added to PostgreSQL
+- **UPDATE**: Existing record is updated in PostgreSQL
+- **DELETE**: Record is deleted from PostgreSQL
 
-## نصب و راه‌اندازی
+## Installation and Setup
 
-### 1. سیستم از قبل نصب است
-اگر سیستم قبلی شما کار می‌کند، نیازی به تغییر نیست. فقط restart کنید:
+### 1. System is already installed
+If your previous system is working, no changes are needed. Just restart:
 
 ```bash
 docker-compose down
 docker-compose up -d
 ```
 
-### 2. تست سیستم
+### 2. Test System
 
 ```bash
-# 1. بررسی وضعیت replication
+# 1. Check replication status
 curl http://localhost:9000/replication/stats
 
-# 2. مشاهده آمار
+# 2. View statistics
 curl http://localhost:9000/replication/stats | jq .
 ```
 
-## تست کارکرد
+## Testing Functionality
 
-### 1. اضافه کردن رکورد جدید
+### 1. Adding New Record
 
 ```sql
--- در MySQL
+-- In MySQL
 INSERT INTO buy_transaction (account_id, user_id, wallet_id, amount, creation_time, last_update_time, is_deleted) 
 VALUES (9999, 9999, 1, '500.00', NOW(), NOW(), 0);
 ```
 
-### 2. آپدیت رکورد
+### 2. Update Record
 
 ```sql
--- در MySQL  
+-- In MySQL  
 UPDATE buy_transaction SET amount = '600.00' WHERE account_id = 9999;
 ```
 
-### 3. حذف رکورد
+### 3. Delete Record
 
 ```sql
--- در MySQL
+-- In MySQL
 DELETE FROM buy_transaction WHERE account_id = 9999;
 ```
 
-### 4. بررسی نتیجه
+### 4. Check Results
 
 ```sql
--- در PostgreSQL
+-- In PostgreSQL
 SELECT * FROM buy_transaction WHERE account_id = 9999;
 ```
 
-## مانیتورینگ
+## Monitoring
 
-### 1. آمار replication
+### 1. Replication Statistics
 
 ```bash
 curl http://localhost:9000/replication/stats
 ```
 
-خروجی نمونه:
+Sample Output:
 ```json
 {
   "status": "active",
@@ -103,100 +103,100 @@ curl http://localhost:9000/replication/stats
 
 ### 2. Dashboard
 
-در آدرس http://localhost:4000 می‌توانید:
-- آمار real-time مشاهده کنید
-- تعداد رویدادهای CDC ببینید
-- وضعیت connectorها را چک کنید
+At http://localhost:4000 you can:
+- View real-time statistics
+- See the number of CDC events
+- Check connector status
 
-### 3. ریست آمار
+### 3. Reset Statistics
 
 ```bash
 curl -X POST http://localhost:9000/replication/reset-stats
 ```
 
-## عیب‌یابی
+## Troubleshooting
 
-### 1. اگر replication کار نمی‌کند
+### 1. If replication is not working
 
 ```bash
-# بررسی logs
+# Check logs
 docker logs data-validator
 
-# بررسی وضعیت
+# Check status
 curl http://localhost:9000/health
 ```
 
-### 2. خطاهای رایج
+### 2. Common Errors
 
-**خطا: "Table does not exist in PostgreSQL"**
-- جدول در PostgreSQL ایجاد نشده
-- ابتدا schema را sync کنید
+**Error: "Table does not exist in PostgreSQL"**
+- Table not created in PostgreSQL
+- First sync the schema
 
-**خطا: "Could not find primary key"**
-- جدول primary key ندارد یا اسم آن 'id' نیست
-- فیلد primary key را بررسی کنید
+**Error: "Could not find primary key"**
+- Table has no primary key or its name is not 'id'
+- Check primary key field
 
-**خطا: "Duplicate key"**  
-- رکورد قبلاً وجود داشته
-- سیستم خودکار سعی در UPDATE می‌کند
+**Error: "Duplicate key"**  
+- Record already existed
+- System automatically tries UPDATE
 
-### 3. بررسی کارکرد
+### 3. Check Functionality
 
 ```bash
-# تعداد رکوردهای MySQL
+# Number of MySQL records
 mysql -h 46.245.77.98 -u root -p adtrace_db_stage -e "SELECT COUNT(*) FROM buy_transaction;"
 
-# تعداد رکوردهای PostgreSQL
+# Number of PostgreSQL records
 docker exec postgres psql -U postgres -d inventory -c "SELECT COUNT(*) FROM buy_transaction;"
 ```
 
-## تنظیمات پیشرفته
+## Advanced Settings
 
-### 1. کنترل جداول
+### 1. Table Control
 
-فقط جداولی که در PostgreSQL وجود دارند replicate می‌شوند.
+Only tables that exist in PostgreSQL are replicated.
 
 ### 2. Type Conversion
 
-سیستم خودکار انواع data را تبدیل می‌کند:
+The system automatically converts data types:
 - MySQL DATETIME → PostgreSQL TIMESTAMP
 - MySQL INT → PostgreSQL INTEGER
 - MySQL VARCHAR → PostgreSQL TEXT
 
 ### 3. Performance
 
-- هر رویداد CDC کمتر از 1 ثانیه اعمال می‌شود
-- سیستم با MySQL و PostgreSQL connection pooling کار می‌کند
-- در صورت خطا، retry نمی‌کند تا performance را حفظ کند
+- Each CDC event is applied in less than 1 second
+- System works with MySQL and PostgreSQL connection pooling
+- In case of error, does not retry to maintain performance
 
-## سوالات متداول
+## Frequently Asked Questions
 
-**Q: آیا کدهای قبلی خراب می‌شوند؟**  
-A: خیر، هیچ کد قبلی تغییر نکرده و همه چیز کماکان کار می‌کند.
+**Q: Will previous code break?**  
+A: No, no previous code has been changed and everything continues to work.
 
-**Q: اگر PostgreSQL خاموش باشد چه می‌شود؟**  
-A: سیستم monitoring ادامه کار می‌دهد، فقط replication متوقف می‌شود.
+**Q: What happens if PostgreSQL is down?**  
+A: The monitoring system continues to work, only replication stops.
 
-**Q: آیا می‌توان replication را خاموش کرد؟**  
-A: بله، کافی است متغیر محیطی تنظیم کنید یا service را restart کنید.
+**Q: Can replication be turned off?**  
+A: Yes, just set the environment variable or restart the service.
 
-**Q: چگونه می‌توان جداول خاص را exclude کرد؟**  
-A: در کد می‌توان فیلتر اضافه کرد یا در تنظیمات Debezium.
+**Q: How can specific tables be excluded?**  
+A: A filter can be added in the code or in Debezium settings.
 
-## لاگ‌ها
+## Logs
 
 ```bash
-# مشاهده لاگ‌های replication
+# View replication logs
 docker logs data-validator | grep "CDC Replication"
 
-# مشاهده لاگ‌های خطا
+# View error logs
 docker logs data-validator | grep "ERROR"
 ```
 
-## پشتیبانی
+## Support
 
-در صورت مشکل:
-1. لاگ‌ها را بررسی کنید
-2. وضعیت health endpoint را چک کنید  
-3. آمار replication را مشاهده کنید
-4. در صورت نیاز، issue ایجاد کنید 
+In case of problems:
+1. Check the logs
+2. Check health endpoint status  
+3. View replication statistics
+4. If needed, create an issue 

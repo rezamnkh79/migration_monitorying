@@ -22,7 +22,7 @@ from models.validation_models import ValidationResult, TableStats, MigrationStat
 from services.data_validator import DataValidator
 from services.dynamic_table_monitor import DynamicTableMonitor  # New Advanced Monitor
 from services.monitoring import MonitoringService
-from services.cdc_replicator import CDCReplicator  # اضافه شده: CDC Replicator
+from services.cdc_replicator import CDCReplicator  # Added: CDC Replicator
 from utils.logger import setup_logger
 
 # Setup logging
@@ -135,7 +135,7 @@ async def startup_event():
             postgres_client=postgres_client,
             redis_client=redis_client,
             global_stats=global_stats,
-            cdc_replicator=cdc_replicator  # اضافه شده: CDC Replicator
+            cdc_replicator=cdc_replicator  # Added: CDC Replicator
         )
         
         # Set global variables
@@ -396,7 +396,7 @@ async def get_replication_stats():
 
 @app.post("/replication/reset-stats")
 async def reset_replication_stats():
-    """ریست آمار replication"""
+    """Reset replication stats"""
     try:
         if cdc_replicator:
             cdc_replicator.reset_stats()

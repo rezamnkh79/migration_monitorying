@@ -30,7 +30,7 @@ class DynamicTableMonitor:
         self.postgres = postgres_client
         self.redis = redis_client
         self.global_stats = global_stats
-        self.cdc_replicator = cdc_replicator  # اضافه شده: CDC Replicator
+        self.cdc_replicator = cdc_replicator  # Added: CDC Replicator
         
         # Configuration - Get from environment variables
         kafka_bootstrap = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
@@ -606,16 +606,16 @@ class DynamicTableMonitor:
             
             cdc_event = message.value
             
-            # استخراج نام جدول از CDC event به جای استفاده از topic name
+            # Extract table name from CDC event instead of using topic name
             actual_table_name = self._extract_table_name_from_event(cdc_event)
             if not actual_table_name:
-                # اگر نتونستیم table name رو extract کنیم، از topic name استفاده کن
+                # If we couldn't extract table name, use topic name
                 actual_table_name = table_name
             
             operation = self._extract_operation(cdc_event)
             
             if operation:
-                # Update global stats - کد قبلی
+                # Update global stats - previous code
                 self.global_stats["cdc_events_processed"] += 1
                 self.global_stats["sync_stats"][operation] = self.global_stats["sync_stats"].get(operation, 0) + 1
                 self.global_stats["last_cdc_event"] = {

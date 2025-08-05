@@ -154,7 +154,7 @@ class PostgreSQLClient:
             # Build INSERT query
             columns = list(data.keys())
             
-            # فقط id های None رو حذف کن، نه همه None value ها
+            # Only remove None id values, not all None values
             filtered_data = {k: v for k, v in data.items() if not (k.lower() == 'id' and v is None)}
             columns = list(filtered_data.keys())
             placeholders = [f":{col}" for col in columns]

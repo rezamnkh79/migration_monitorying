@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Schema Migration Script - MySQL to PostgreSQL
-تاریخ: 2025-08-05
-نویسنده: AdTrace Migration System
-هدف: ایجاد تمام جداول MySQL در PostgreSQL با schema مناسب
+Date: 2025-08-05
+Author: AdTrace Migration System
+Purpose: Create all MySQL tables in PostgreSQL with appropriate schema
 """
 
 import os
@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class MySQLToPostgreSQLMigrator:
-    """اسکریپت مهاجرت schema از MySQL به PostgreSQL"""
+    """Schema migration script from MySQL to PostgreSQL"""
     
     def __init__(self):
         # MySQL Configuration
@@ -101,7 +101,7 @@ class MySQLToPostgreSQLMigrator:
         }
         
     def connect_databases(self):
-        """اتصال به هر دو دیتابیس"""
+        """Connect to both databases"""
         try:
             # MySQL connection
             mysql_conn_str = f"mysql://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.mysql_database}"
@@ -110,7 +110,7 @@ class MySQLToPostgreSQLMigrator:
             # Test MySQL connection
             with self.mysql_engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            logger.info(f"✅ MySQL connected: {self.mysql_host}:{self.mysql_port}/{self.mysql_database}")
+            logger.info(f"MySQL connected: {self.mysql_host}:{self.mysql_port}/{self.mysql_database}")
             
             # PostgreSQL admin connection to create new database
             admin_conn_str = f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.admin_database}"
@@ -119,7 +119,7 @@ class MySQLToPostgreSQLMigrator:
             # Test admin connection
             with self.admin_engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            logger.info(f"✅ PostgreSQL admin connected: {self.postgres_host}:{self.postgres_port}")
+            logger.info(f"PostgreSQL admin connected: {self.postgres_host}:{self.postgres_port}")
             
             # Create new database
             self.create_target_database()
@@ -131,16 +131,16 @@ class MySQLToPostgreSQLMigrator:
             # Test target database connection
             with self.postgres_engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            logger.info(f"✅ Target database connected: {self.postgres_host}:{self.postgres_port}/{self.target_database}")
+            logger.info(f"Target database connected: {self.postgres_host}:{self.postgres_port}/{self.target_database}")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Database connection failed: {str(e)}")
+            logger.error(f"Database connection failed: {str(e)}")
             return False
     
     def create_target_database(self):
-        """ایجاد دیتابیس جدید با نام امروز"""
+        """Create a new database with today's name"""
         try:
             with self.admin_engine.connect() as conn:
                 # Check if database already exists
@@ -149,18 +149,18 @@ class MySQLToPostgreSQLMigrator:
                 """), {"db_name": self.target_database})
                 
                 if result.fetchone()[0] > 0:
-                    logger.info(f"✅ Database {self.target_database} already exists")
+                    logger.info(f"Database {self.target_database} already exists")
                 else:
                     # Create new database
                     conn.execute(text(f'CREATE DATABASE "{self.target_database}"'))
-                    logger.info(f"✅ Created new database: {self.target_database}")
+                    logger.info(f"Created new database: {self.target_database}")
                     
         except Exception as e:
-            logger.error(f"❌ Failed to create database {self.target_database}: {str(e)}")
+            logger.error(f"Failed to create database {self.target_database}: {str(e)}")
             raise
     
     def get_mysql_tables(self) -> List[str]:
-        """دریافت لیست جداول MySQL"""
+        """Get list of MySQL tables"""
         try:
             with self.mysql_engine.connect() as conn:
                 result = conn.execute(text("SHOW TABLES"))
@@ -172,15 +172,15 @@ class MySQLToPostgreSQLMigrator:
                 if table not in self.excluded_tables and not table.startswith('_')
             ]
             
-            logger.info(f"📋 Found {len(filtered_tables)} tables to migrate (out of {len(tables)} total)")
+            logger.info(f"Found {len(filtered_tables)} tables to migrate (out of {len(tables)} total)")
             return filtered_tables
             
         except Exception as e:
-            logger.error(f"❌ Failed to get MySQL tables: {str(e)}")
+            logger.error(f"Failed to get MySQL tables: {str(e)}")
             return []
     
     def get_mysql_table_schema(self, table_name: str) -> List[Dict[str, Any]]:
-        """دریافت schema جدول از MySQL"""
+        """Get table schema from MySQL"""
         try:
             with self.mysql_engine.connect() as conn:
                 result = conn.execute(text(f"DESCRIBE {table_name}"))
@@ -193,11 +193,11 @@ class MySQLToPostgreSQLMigrator:
                 return schema, indexes
                 
         except Exception as e:
-            logger.error(f"❌ Failed to get schema for {table_name}: {str(e)}")
+            logger.error(f"Failed to get schema for {table_name}: {str(e)}")
             return [], []
     
     def convert_mysql_type_to_postgres(self, mysql_type: str) -> str:
-        """تبدیل نوع داده MySQL به PostgreSQL"""
+        """Convert MySQL data type to PostgreSQL"""
         # Parse MySQL type (e.g., "varchar(255)", "int(11)", "decimal(10,2)")
         mysql_type = mysql_type.lower()
         
@@ -239,11 +239,11 @@ class MySQLToPostgreSQLMigrator:
                 return postgres_type
         else:
             # Default fallback
-            logger.warning(f"⚠️ Unknown MySQL type: {mysql_type}, defaulting to TEXT")
+            logger.warning(f"Unknown MySQL type: {mysql_type}, defaulting to TEXT")
             return 'TEXT'
     
     def create_postgres_table_sql(self, table_name: str, schema: List[Dict[str, Any]], indexes: List[Dict[str, Any]]) -> str:
-        """ایجاد SQL برای ساخت جدول در PostgreSQL"""
+        """Generate SQL for creating a table in PostgreSQL"""
         
         columns = []
         primary_keys = []
@@ -371,7 +371,7 @@ class MySQLToPostgreSQLMigrator:
         return '\n\n'.join(all_sql)
     
     def table_exists_in_postgres(self, table_name: str) -> bool:
-        """بررسی وجود جدول در PostgreSQL"""
+        """Check if table exists in PostgreSQL"""
         try:
             with self.postgres_engine.connect() as conn:
                 result = conn.execute(text("""
@@ -382,17 +382,17 @@ class MySQLToPostgreSQLMigrator:
                 """), {"table_name": table_name})
                 return result.fetchone()[0] > 0
         except Exception as e:
-            logger.error(f"❌ Error checking table existence {table_name}: {str(e)}")
+            logger.error(f"Error checking table existence {table_name}: {str(e)}")
             return False
     
     def migrate_table(self, table_name: str, force_recreate: bool = False) -> bool:
-        """مهاجرت یک جدول"""
+        """Migrate a single table"""
         try:
-            logger.info(f"🔄 Migrating table: {table_name}")
+            logger.info(f"Migrating table: {table_name}")
             
             # Check if table already exists
             if self.table_exists_in_postgres(table_name) and not force_recreate:
-                logger.info(f"⏭️ Table {table_name} already exists, skipping...")
+                logger.info(f"Table {table_name} already exists, skipping...")
                 self.migration_report['skipped_tables'].append(table_name)
                 return True
             
@@ -406,7 +406,7 @@ class MySQLToPostgreSQLMigrator:
             
             # Drop table if force recreate
             if force_recreate and self.table_exists_in_postgres(table_name):
-                logger.info(f"🗑️ Dropping existing table {table_name}")
+                logger.info(f"Dropping existing table {table_name}")
                 with self.postgres_engine.connect() as conn:
                     trans = conn.begin()
                     try:
@@ -428,7 +428,7 @@ class MySQLToPostgreSQLMigrator:
                             conn.execute(text(statement))
                     
                     trans.commit()
-                    logger.info(f"✅ Successfully migrated table: {table_name}")
+                    logger.info(f"Successfully migrated table: {table_name}")
                     self.migration_report['migrated_tables'] += 1
                     return True
                     
@@ -437,15 +437,15 @@ class MySQLToPostgreSQLMigrator:
                     raise e
                     
         except Exception as e:
-            logger.error(f"❌ Failed to migrate table {table_name}: {str(e)}")
+            logger.error(f"Failed to migrate table {table_name}: {str(e)}")
             self.migration_report['failed_tables'].append({'table': table_name, 'error': str(e)})
             return False
     
     def run_migration(self, specific_tables: Optional[List[str]] = None, force_recreate: bool = False):
-        """اجرای کامل مهاجرت"""
-        logger.info("🚀 Starting MySQL to PostgreSQL schema migration")
-        logger.info(f"📅 Migration date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        logger.info(f"🎯 Target database: {self.target_database}")
+        """Run the full migration"""
+        logger.info("Starting MySQL to PostgreSQL schema migration")
+        logger.info(f"Migration date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Target database: {self.target_database}")
         
         # Connect to databases
         if not self.connect_databases():
@@ -454,12 +454,12 @@ class MySQLToPostgreSQLMigrator:
         # Get tables to migrate
         if specific_tables:
             tables_to_migrate = specific_tables
-            logger.info(f"📋 Migrating specific tables: {tables_to_migrate}")
+            logger.info(f"Migrating specific tables: {tables_to_migrate}")
         else:
             tables_to_migrate = self.get_mysql_tables()
         
         if not tables_to_migrate:
-            logger.error("❌ No tables found to migrate")
+            logger.error("No tables found to migrate")
             return False
         
         self.migration_report['total_tables'] = len(tables_to_migrate)
@@ -472,7 +472,7 @@ class MySQLToPostgreSQLMigrator:
             
             # Progress update
             progress = (success_count / len(tables_to_migrate)) * 100
-            logger.info(f"📊 Progress: {success_count}/{len(tables_to_migrate)} ({progress:.1f}%)")
+            logger.info(f"Progress: {success_count}/{len(tables_to_migrate)} ({progress:.1f}%)")
         
         # Final report
         self.migration_report['end_time'] = datetime.now()
@@ -481,33 +481,33 @@ class MySQLToPostgreSQLMigrator:
         return success_count == len(tables_to_migrate)
     
     def print_migration_report(self):
-        """چاپ گزارش نهایی مهاجرت"""
+        """Print final migration report"""
         duration = self.migration_report['end_time'] - self.migration_report['start_time']
         
         logger.info("="*60)
-        logger.info("📊 MIGRATION REPORT")
+        logger.info("MIGRATION REPORT")
         logger.info("="*60)
-        logger.info(f"🎯 Target Database: {self.target_database}")
-        logger.info(f"⏱️ Duration: {duration}")
-        logger.info(f"📋 Total tables: {self.migration_report['total_tables']}")
-        logger.info(f"✅ Successfully migrated: {self.migration_report['migrated_tables']}")
-        logger.info(f"⏭️ Skipped tables: {len(self.migration_report['skipped_tables'])}")
-        logger.info(f"❌ Failed tables: {len(self.migration_report['failed_tables'])}")
+        logger.info(f"Target Database: {self.target_database}")
+        logger.info(f"Duration: {duration}")
+        logger.info(f"Total tables: {self.migration_report['total_tables']}")
+        logger.info(f"Successfully migrated: {self.migration_report['migrated_tables']}")
+        logger.info(f"Skipped tables: {len(self.migration_report['skipped_tables'])}")
+        logger.info(f"Failed tables: {len(self.migration_report['failed_tables'])}")
         
         if self.migration_report['skipped_tables']:
-            logger.info(f"⏭️ Skipped: {', '.join(self.migration_report['skipped_tables'])}")
+            logger.info(f"Skipped: {', '.join(self.migration_report['skipped_tables'])}")
         
         if self.migration_report['failed_tables']:
-            logger.info("❌ Failed tables:")
+            logger.info("Failed tables:")
             for failed in self.migration_report['failed_tables']:
                 logger.info(f"   - {failed['table']}: {failed['error']}")
         
         success_rate = (self.migration_report['migrated_tables'] / self.migration_report['total_tables']) * 100
-        logger.info(f"📈 Success rate: {success_rate:.1f}%")
+        logger.info(f"Success rate: {success_rate:.1f}%")
         
         if success_rate > 0:
             logger.info("")
-            logger.info("🔍 Next Steps:")
+            logger.info("Next Steps:")
             logger.info(f"1. Verify tables in new database:")
             logger.info(f"   psql -h {self.postgres_host} -U {self.postgres_user} -d {self.target_database}")
             logger.info(f"   \\dt")
@@ -521,7 +521,7 @@ class MySQLToPostgreSQLMigrator:
         logger.info("="*60)
 
 def main():
-    """تابع اصلی اسکریپت"""
+    """Main function of the script"""
     parser = argparse.ArgumentParser(description='MySQL to PostgreSQL Schema Migration Tool')
     parser.add_argument('--tables', nargs='+', help='Specific tables to migrate (default: all tables)')
     parser.add_argument('--force', action='store_true', help='Force recreate existing tables')
@@ -533,12 +533,12 @@ def main():
     migrator = MySQLToPostgreSQLMigrator()
     
     if args.dry_run:
-        logger.info("🔍 DRY RUN MODE - No changes will be made")
+        logger.info("DRY RUN MODE - No changes will be made")
         if not migrator.connect_databases():
             return 1
         
         tables = args.tables if args.tables else migrator.get_mysql_tables()
-        logger.info(f"📋 Would migrate {len(tables)} tables: {', '.join(tables)}")
+        logger.info(f"Would migrate {len(tables)} tables: {', '.join(tables)}")
         return 0
     
     # Run migration

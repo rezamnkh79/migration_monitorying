@@ -14,7 +14,7 @@ class DebeziumKafkaConsumer:
         self.data_validator = data_validator
         self.monitoring_service = monitoring_service
         self.global_stats = global_stats
-        self.cdc_replicator = cdc_replicator  # اضافه شده: CDC Replicator
+        self.cdc_replicator = cdc_replicator  # Added: CDC Replicator
         self.consumer = None
         self.running = False
         
@@ -84,7 +84,7 @@ class DebeziumKafkaConsumer:
                 return
                 
             cdc_event = message.value
-            table_name = self._extract_table_name_from_event(cdc_event) or topic  # بهبود استخراج نام جدول
+            table_name = self._extract_table_name_from_event(cdc_event) or topic  # Improved table name extraction
             
             # Extract operation type from Debezium message
             operation = self.get_operation_type(cdc_event)

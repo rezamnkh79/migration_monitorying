@@ -65,15 +65,15 @@ INSERT INTO users (username, email, full_name, metadata) VALUES
 ('admin_user', 'admin@example.com', 'Admin User', '{"role": "admin", "permissions": ["read", "write", "delete"]}');
 
 INSERT INTO products (name, description, price, stock_quantity, category_id) VALUES
-('لپ تاپ Dell XPS 13', 'لپ تاپ فوق العاده با صفحه نمایش 13 اینچی', 1299.99, 50, 1),
-('ماوس لاجیتک MX Master 3', 'ماوس بی سیم با دقت بالا', 99.99, 200, 2),
-('کیبورد مکانیکی Razer', 'کیبورد گیمینگ با کلیدهای مکانیکی', 149.99, 75, 2),
-('مانیتور Samsung 27 اینچ', 'مانیتور 4K با رنگ بندی عالی', 399.99, 30, 3);
+('Dell XPS 13 Laptop', 'Amazing laptop with 13-inch display', 1299.99, 50, 1),
+('Logitech MX Master 3 Mouse', 'Wireless mouse with high precision', 99.99, 200, 2),
+('Razer Mechanical Keyboard', 'Gaming keyboard with mechanical keys', 149.99, 75, 2),
+('Samsung 27-inch Monitor', '4K monitor with excellent color rendering', 399.99, 30, 3);
 
 INSERT INTO orders (user_id, order_number, total_amount, order_status, shipping_address) VALUES
-(1, 'ORD-001', 1399.98, 'processing', 'تهران، خیابان ولیعصر، پلاک 123'),
-(2, 'ORD-002', 249.98, 'shipped', 'اصفهان، خیابان چهارباغ، پلاک 456'),
-(3, 'ORD-003', 399.99, 'delivered', 'شیراز، خیابان زند، پلاک 789');
+(1, 'ORD-001', 1399.98, 'processing', 'Tehran, Valiasr Street, No. 123'),
+(2, 'ORD-002', 249.98, 'shipped', 'Isfahan, Chahar Bagh Street, No. 456'),
+(3, 'ORD-003', 399.99, 'delivered', 'Shiraz, Zand Street, No. 789');
 
 INSERT INTO order_items (order_id, product_id, quantity, unit_price, total_price) VALUES
 (1, 1, 1, 1299.99, 1299.99),
