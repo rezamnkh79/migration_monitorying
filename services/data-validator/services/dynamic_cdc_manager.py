@@ -83,6 +83,28 @@ class DynamicCDCManager:
             self.monitored_tables = []
             logger.warning("Using empty table list - will retry discovery later")
     
+    def _build_dynamic_table_include_list(self, database_name: str) -> str:
+        """Build table.include.list dynamically from discovered tables"""
+        try:
+            if not self.monitored_tables:
+                # Re-discover tables if list is empty
+                self._discover_tables()
+            
+            if not self.monitored_tables:
+                logger.warning("No tables discovered for CDC monitoring")
+                return ""
+            
+            # Build the table include list in format: database.table1,database.table2,...
+            table_list = [f"{database_name}.{table}" for table in self.monitored_tables]
+            table_include_string = ",".join(table_list)
+            
+            logger.info(f"Built dynamic table include list: {table_include_string}")
+            return table_include_string
+            
+        except Exception as e:
+            logger.error(f"Failed to build dynamic table list: {str(e)}")
+            return ""
+    
     def setup_dynamic_connectors(self):
         """Setup Debezium connectors for all discovered tables"""
         try:
@@ -162,8 +184,16 @@ class DynamicCDCManager:
             current_time = int(time.time())
             server_id = str(current_time)[-7:]
             
+            # Build dynamic table include list
+            dynamic_table_list = self._build_dynamic_table_include_list(database_name)
+            
+            if not dynamic_table_list:
+                logger.error("No tables found for CDC monitoring - cannot create connector")
+                return False
+            
             logger.info(f"Creating WORKING real-time CDC connector...")
             logger.info(f"Server ID: {server_id}")
+            logger.info(f"Monitoring tables: {dynamic_table_list}")
             
             # THIS IS THE WORKING CONFIGURATION!
             mysql_connector_config = {
@@ -178,7 +208,7 @@ class DynamicCDCManager:
                     "database.server.id": server_id,
                     "database.server.name": f"adtrace_{server_id}",
                     "database.include.list": database_name,
-                    "table.include.list": f"{database_name}.buy_transaction",
+                    "table.include.list": dynamic_table_list,
                     "schema.history.internal.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
                     "schema.history.internal.kafka.topic": f"schema-history-working-{server_id}",
                     "include.schema.changes": "true",

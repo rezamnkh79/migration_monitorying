@@ -192,6 +192,8 @@ class CDCReplicator:
     
     def _convert_data_for_postgres(self, data: Dict[str, Any], table_name: str) -> Dict[str, Any]:
         """تبدیل data برای سازگاری با PostgreSQL"""
+        from datetime import datetime
+        
         converted_data = {}
         
         for key, value in data.items():
@@ -199,13 +201,29 @@ class CDCReplicator:
             if key.lower() == 'id' and value is None:
                 continue
                 
-            # تبدیل datetime strings
-            if isinstance(value, str) and self._is_datetime_string(value):
-                # PostgreSQL datetime format
-                converted_data[key] = value
+            # تبدیل Unix timestamp به datetime
+            if value is not None and (key.endswith('_time') or 'time' in key.lower()):
+                try:
+                    # اگر value یه عدد بزرگه، احتمالاً Unix timestamp هست (milliseconds)
+                    if isinstance(value, (int, float)) and value > 1000000000:
+                        if value > 10000000000:  # milliseconds
+                            timestamp = value / 1000
+                        else:  # seconds
+                            timestamp = value
+                        converted_data[key] = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    else:
+                        converted_data[key] = value
+                except (ValueError, OverflowError):
+                    converted_data[key] = value
+            # تبدیل boolean fields (is_deleted, is_active, etc.)
+            elif key.startswith('is_') or key.endswith('_flag') or key in ['deleted', 'active', 'enabled']:
+                if isinstance(value, (int, str)):
+                    converted_data[key] = bool(int(value)) if str(value).isdigit() else bool(value)
+                else:
+                    converted_data[key] = bool(value)
             else:
                 converted_data[key] = value
-        
+                
         return converted_data
     
     def _is_datetime_string(self, value: str) -> bool:

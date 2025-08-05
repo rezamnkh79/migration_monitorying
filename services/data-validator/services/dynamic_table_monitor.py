@@ -164,6 +164,29 @@ class DynamicTableMonitor:
         
         return True
     
+    def _build_dynamic_table_include_list(self, database_name: str) -> str:
+        """Build table.include.list dynamically from discovered tables"""
+        try:
+            if not self.current_tables:
+                # Re-discover tables if list is empty
+                self._discover_current_tables()
+            
+            if not self.current_tables:
+                logger.warning("No tables discovered for CDC monitoring")
+                return ""
+            
+            # Build the table include list in format: database.table1,database.table2,...
+            table_list = [f"{database_name}.{table}" for table in sorted(self.current_tables)]
+            table_include_string = ",".join(table_list)
+            
+            logger.info(f"Built dynamic table include list for {len(self.current_tables)} tables")
+            logger.debug(f"Table list: {table_include_string}")
+            return table_include_string
+            
+        except Exception as e:
+            logger.error(f"Failed to build dynamic table list: {str(e)}")
+            return ""
+    
     def _get_table_columns(self, table_name: str) -> List[str]:
         """Get column names for a table"""
         try:
@@ -380,7 +403,7 @@ class DynamicTableMonitor:
                     "database.server.id": server_id,
                     "database.server.name": f"adtrace_{server_id}",
                     "database.include.list": database_name,
-                    "table.include.list": f"{database_name}.buy_transaction",
+                    "table.include.list": self._build_dynamic_table_include_list(database_name),
                     "schema.history.internal.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
                     "schema.history.internal.kafka.topic": f"schema-history-working-{server_id}",
                     "include.schema.changes": "true",
@@ -582,6 +605,13 @@ class DynamicTableMonitor:
                 return
             
             cdc_event = message.value
+            
+            # استخراج نام جدول از CDC event به جای استفاده از topic name
+            actual_table_name = self._extract_table_name_from_event(cdc_event)
+            if not actual_table_name:
+                # اگر نتونستیم table name رو extract کنیم، از topic name استفاده کن
+                actual_table_name = table_name
+            
             operation = self._extract_operation(cdc_event)
             
             if operation:
@@ -589,26 +619,26 @@ class DynamicTableMonitor:
                 self.global_stats["cdc_events_processed"] += 1
                 self.global_stats["sync_stats"][operation] = self.global_stats["sync_stats"].get(operation, 0) + 1
                 self.global_stats["last_cdc_event"] = {
-                    "table": table_name,
+                    "table": actual_table_name,
                     "operation": operation,
                     "timestamp": datetime.now().isoformat()
                 }
                 
-                self._store_cdc_event(cdc_event, table_name, operation)
+                self._store_cdc_event(cdc_event, actual_table_name, operation)
                 
-                self._update_table_sync_status(table_name, operation)
+                self._update_table_sync_status(actual_table_name, operation)
                 
                 if self.cdc_replicator:
                     try:
-                        replication_success = self.cdc_replicator.process_cdc_event(cdc_event, table_name, operation)
+                        replication_success = self.cdc_replicator.process_cdc_event(cdc_event, actual_table_name, operation)
                         if replication_success:
-                            logger.info(f"CDC Replication successful: {operation} on {table_name}")
+                            logger.info(f"CDC Replication successful: {operation} on {actual_table_name}")
                         else:
-                            logger.warning(f"CDC Replication failed: {operation} on {table_name}")
+                            logger.warning(f"CDC Replication failed: {operation} on {actual_table_name}")
                     except Exception as e:
                         logger.error(f"CDC Replication error: {str(e)}")
                 
-                logger.info(f"CDC Event: {operation} on {table_name} (Total: {self.global_stats['cdc_events_processed']})")
+                logger.info(f"CDC Event: {operation} on {actual_table_name} (Total: {self.global_stats['cdc_events_processed']})")
                 
         except Exception as e:
             logger.error(f"Failed to process CDC event: {str(e)}")
@@ -622,6 +652,21 @@ class DynamicTableMonitor:
             return None
         except Exception as e:
             logger.error(f"Failed to extract operation: {str(e)}")
+            return None
+    
+    def _extract_table_name_from_event(self, cdc_event):
+        """Extract table name from CDC event"""
+        try:
+            # Try different ways to extract table name from CDC event
+            if 'source' in cdc_event and 'table' in cdc_event['source']:
+                return cdc_event['source']['table']
+            
+            if 'payload' in cdc_event and 'source' in cdc_event['payload'] and 'table' in cdc_event['payload']['source']:
+                return cdc_event['payload']['source']['table']
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting table name: {str(e)}")
             return None
     
     def _store_cdc_event(self, cdc_event, table_name, operation):

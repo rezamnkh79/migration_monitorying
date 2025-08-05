@@ -1084,6 +1084,56 @@ async def discover_tables():
         logger.error(f"Failed to discover tables: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/dynamic-table-config")
+async def get_dynamic_table_config():
+    """Get the current dynamic table configuration that will be used for CDC"""
+    try:
+        database_name = os.getenv('MYSQL_DATABASE', 'adtrace_db_stage')
+        
+        # Get current discovered tables
+        mysql_tables = mysql_client.get_table_list() if mysql_client else []
+        
+        # Apply the same filtering logic as the CDC managers
+        excluded_patterns = [
+            'migration_log', 'schema_migrations', 'flyway_schema_history',
+            'information_schema', 'performance_schema', 'mysql', 'sys'
+        ]
+        
+        def should_monitor(table_name):
+            table_lower = table_name.lower()
+            for pattern in excluded_patterns:
+                if pattern in table_lower:
+                    return False
+            if table_name.startswith('_') or table_name.startswith('tmp_'):
+                return False
+            if '_backup' in table_lower or '_bak' in table_lower:
+                return False
+            return True
+        
+        monitored_tables = [table for table in mysql_tables if should_monitor(table)]
+        
+        # Build the table include list as it would be used in CDC
+        table_include_list = [f"{database_name}.{table}" for table in monitored_tables]
+        table_include_string = ",".join(table_include_list)
+        
+        return {
+            "database_name": database_name,
+            "total_mysql_tables": len(mysql_tables),
+            "monitored_tables": monitored_tables,
+            "monitored_count": len(monitored_tables),
+            "table_include_string": table_include_string,
+            "excluded_tables": [t for t in mysql_tables if not should_monitor(t)],
+            "will_monitor": {
+                "buy_transaction": "buy_transaction" in monitored_tables,
+                "wallet": "wallet" in monitored_tables
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get dynamic table config: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     # for change this should change EXPORT Dockerfile and docker-compose :9000
     uvicorn.run(
