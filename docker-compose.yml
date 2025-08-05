@@ -76,6 +76,9 @@ services:
       - kafka
     ports:
       - "8083:8083"
+    # Alternative approach - map localhost to host IP
+    # extra_hosts:
+    #   - "localhost:172.17.0.1"
     environment:
       BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       GROUP_ID: 1
@@ -132,8 +135,7 @@ services:
       dockerfile: Dockerfile
     hostname: data-validator
     container_name: data-validator
-    ports:
-      - "${VALIDATOR_PORT:-9000}:9000"
+    network_mode: host
     env_file:
       - .env
     volumes:
@@ -146,8 +148,7 @@ services:
       dockerfile: Dockerfile
     hostname: monitoring-dashboard
     container_name: monitoring-dashboard
-    ports:
-      - "${MONITORING_PORT:-4000}:${MONITORING_PORT:-4000}"
+    network_mode: host
     env_file:
       - .env
 
