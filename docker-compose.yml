@@ -53,19 +53,19 @@ services:
   #     command: --server-id=223344 --log-bin=mysql-bin --binlog-format=ROW --binlog-row-image=FULL --expire-logs-days=10
 
   # PostgreSQL Target Database
-  postgres:
-    image: postgres:15
-    hostname: postgres
-    container_name: postgres
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DATABASE:-inventory}
-    volumes:
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - postgres_data:/var/lib/postgresql/data
+#  postgres:
+#    image: postgres:15
+#    hostname: postgres
+#    container_name: postgres
+#    ports:
+#      - "${POSTGRES_PORT:-5432}:5432"
+#    environment:
+#      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+#      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+#      POSTGRES_DB: ${POSTGRES_DATABASE:-inventory}
+#    volumes:
+#      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+#      - postgres_data:/var/lib/postgresql/data
 
   # Kafka Connect with Debezium
   connect:
@@ -74,7 +74,6 @@ services:
     container_name: connect
     depends_on:
       - kafka
-      - postgres
     ports:
       - "8083:8083"
     environment:
@@ -117,14 +116,14 @@ services:
       KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: ${KAFKA_CONNECT_URL:-http://connect:8083}
 
   # Redis for caching and monitoring
-  redis:
-    image: redis:7-alpine
-    hostname: redis
-    container_name: redis
-    ports:
-      - "${REDIS_PORT:-6380}:6379"
-    volumes:
-      - redis_data:/data
+#  redis:
+#    image: redis:7-alpine
+#    hostname: redis
+#    container_name: redis
+#    ports:
+#      - "${REDIS_PORT:-6380}:6379"
+#    volumes:
+#      - redis_data:/data
 
   # Data Validation Service
   data-validator:
@@ -148,10 +147,10 @@ services:
     hostname: monitoring-dashboard
     container_name: monitoring-dashboard
     ports:
-      - "${MONITORING_PORT:-3000}:3000"
+      - "${MONITORING_PORT:-4000}:${MONITORING_PORT:-4000}"
     env_file:
       - .env
 
-volumes:
-  postgres_data:
-  redis_data:
+#volumes:
+#  postgres_data:
+#  redis_data:

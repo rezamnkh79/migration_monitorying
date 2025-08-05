@@ -25,11 +25,12 @@ class DynamicTableMonitor:
     """
     
     def __init__(self, mysql_client: MySQLClient, postgres_client: PostgreSQLClient, 
-                 redis_client, global_stats: Dict[str, Any]):
+                 redis_client, global_stats: Dict[str, Any], cdc_replicator=None):
         self.mysql = mysql_client
         self.postgres = postgres_client
         self.redis = redis_client
         self.global_stats = global_stats
+        self.cdc_replicator = cdc_replicator  # اضافه شده: CDC Replicator
         
         # Configuration - Get from environment variables
         kafka_bootstrap = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
@@ -584,7 +585,7 @@ class DynamicTableMonitor:
             operation = self._extract_operation(cdc_event)
             
             if operation:
-                # Update global stats
+                # Update global stats - کد قبلی
                 self.global_stats["cdc_events_processed"] += 1
                 self.global_stats["sync_stats"][operation] = self.global_stats["sync_stats"].get(operation, 0) + 1
                 self.global_stats["last_cdc_event"] = {
@@ -593,11 +594,19 @@ class DynamicTableMonitor:
                     "timestamp": datetime.now().isoformat()
                 }
                 
-                # Store event
                 self._store_cdc_event(cdc_event, table_name, operation)
                 
-                # Update table sync status
                 self._update_table_sync_status(table_name, operation)
+                
+                if self.cdc_replicator:
+                    try:
+                        replication_success = self.cdc_replicator.process_cdc_event(cdc_event, table_name, operation)
+                        if replication_success:
+                            logger.info(f"CDC Replication successful: {operation} on {table_name}")
+                        else:
+                            logger.warning(f"CDC Replication failed: {operation} on {table_name}")
+                    except Exception as e:
+                        logger.error(f"CDC Replication error: {str(e)}")
                 
                 logger.info(f"CDC Event: {operation} on {table_name} (Total: {self.global_stats['cdc_events_processed']})")
                 

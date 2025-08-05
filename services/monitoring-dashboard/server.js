@@ -48,27 +48,60 @@ const config = {
 };
 
 // Initialize connections
-let redisClient;
-let mysqlConnection;
-let postgresClient;
+let redisClient = null;
+let mysqlConnection = null;
+let postgresClient = null;
+
+// Redis Connection (optional - will work without it)
+async function connectRedis() {
+  // Skip Redis if disabled in environment
+  if (config.redis.host === 'disabled' || !config.redis.host || config.redis.host === 'redis') {
+    console.log('Redis disabled or not properly configured, skipping Redis connection');
+    redisClient = null;
+    return;
+  }
+  
+  try {
+    redisClient = redis.createClient({
+      url: `redis://${config.redis.host}:${config.redis.port}`,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries > 3) {
+            console.log('Redis connection failed after 3 retries, running without Redis');
+            return false; // Don't retry
+          }
+          return Math.min(retries * 100, 1000);
+        }
+      }
+    });
+
+    redisClient.on('error', (err) => {
+      console.log('Redis Client Error:', err.message);
+      redisClient = null; // Disable Redis functionality
+    });
+
+    redisClient.on('connect', () => {
+      console.log('Connected to Redis successfully');
+    });
+
+    await redisClient.connect();
+  } catch (error) {
+    console.log('Redis connection failed, continuing without Redis:', error.message);
+    redisClient = null;
+  }
+}
 
 async function initializeConnections() {
   try {
-    // Redis connection
-    redisClient = redis.createClient({
-      socket: {
-        host: config.redis.host,
-        port: config.redis.port
-      }
-    });
+    // Try Redis connection (optional) - only if enabled
+    const redis_host = process.env.REDIS_HOST;
+    if (redis_host !== 'disabled' && redis_host !== 'redis' && redis_host) {
+      await connectRedis();
+    } else {
+      console.log('Redis is disabled in configuration, skipping Redis connection');
+      redisClient = null;
+    }
     
-    redisClient.on('error', (err) => {
-      console.error('Redis Client Error:', err);
-    });
-    
-    await redisClient.connect();
-    console.log('Connected to Redis');
-
     // MySQL connection
     mysqlConnection = await mysql.createConnection(config.mysql);
     console.log('Connected to MySQL');
@@ -79,7 +112,8 @@ async function initializeConnections() {
     console.log('Connected to PostgreSQL');
 
   } catch (error) {
-    console.error('Failed to initialize connections:', error);
+    console.error('Failed to initialize some connections:', error);
+    console.log('Continuing with available connections...');
   }
 }
 
@@ -236,6 +270,9 @@ app.get('/api/latest-records/:tableName', async (req, res) => {
 
 // Helper functions
 async function testRedisConnection() {
+  if (!redisClient) {
+    return { status: 'disconnected', message: 'Redis is not initialized' };
+  }
   try {
     await redisClient.ping();
     return { status: 'connected', message: 'Redis is healthy' };
@@ -429,7 +466,7 @@ async function sendRealTimeUpdate(socket) {
 }
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.MONITORING_PORT || process.env.PORT || 3000;
 
 async function startServer() {
   await initializeConnections();

@@ -153,21 +153,37 @@ class PostgreSQLClient:
         try:
             # Build INSERT query
             columns = list(data.keys())
+            
+            filtered_data = {k: v for k, v in data.items() if v is not None or k.lower() != 'id'}
+            columns = list(filtered_data.keys())
             placeholders = [f":{col}" for col in columns]
             
             query = f"""
             INSERT INTO {table_name} ({', '.join(columns)}) 
             VALUES ({', '.join(placeholders)})
+            ON CONFLICT (id) DO UPDATE SET
+            {', '.join([f"{col} = EXCLUDED.{col}" for col in columns if col.lower() != 'id'])}
             """
+            
+            if len(columns) == 1 and columns[0].lower() == 'id':
+                query = f"""
+                INSERT INTO {table_name} ({', '.join(columns)}) 
+                VALUES ({', '.join(placeholders)})
+                ON CONFLICT (id) DO NOTHING
+                """
             
             with self.engine.connect() as conn:
                 trans = conn.begin()
                 try:
-                    conn.execute(text(query), data)
+                    result = conn.execute(text(query), filtered_data)
                     trans.commit()
                     return True
                 except Exception as e:
                     trans.rollback()
+                    if "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():
+                        logger.warning(f"Duplicate key in {table_name}, attempting UPDATE instead")
+                        if 'id' in data:
+                            return self.update_record(table_name, data['id'], {k: v for k, v in data.items() if k.lower() != 'id'})
                     raise e
                     
         except Exception as e:

@@ -9,11 +9,12 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 class DebeziumKafkaConsumer:
-    def __init__(self, bootstrap_servers, data_validator, monitoring_service, global_stats):
+    def __init__(self, bootstrap_servers, data_validator, monitoring_service, global_stats, cdc_replicator=None):
         self.bootstrap_servers = bootstrap_servers
         self.data_validator = data_validator
         self.monitoring_service = monitoring_service
         self.global_stats = global_stats
+        self.cdc_replicator = cdc_replicator  # اضافه شده: CDC Replicator
         self.consumer = None
         self.running = False
         
@@ -74,7 +75,7 @@ class DebeziumKafkaConsumer:
         finally:
             if self.consumer:
                 self.consumer.close()
-                logger.info("CDC Consumer closed")
+
     
     def process_cdc_message(self, message, topic):
         """Process a single CDC event from Debezium (synchronous version)"""
@@ -83,13 +84,12 @@ class DebeziumKafkaConsumer:
                 return
                 
             cdc_event = message.value
-            table_name = topic  # Topic name is the table name in our setup
+            table_name = self._extract_table_name_from_event(cdc_event) or topic  # بهبود استخراج نام جدول
             
             # Extract operation type from Debezium message
             operation = self.get_operation_type(cdc_event)
             
             if operation:
-                # Update global stats
                 self.global_stats["cdc_events_processed"] += 1
                 self.global_stats["sync_stats"][operation] = self.global_stats["sync_stats"].get(operation, 0) + 1
                 self.global_stats["last_cdc_event"] = {
@@ -98,16 +98,37 @@ class DebeziumKafkaConsumer:
                     "timestamp": datetime.now().isoformat()
                 }
                 
-                # Store event in Redis for history (synchronous)
                 self.store_cdc_event_sync(cdc_event, table_name, operation)
                 
-                # Update table sync status (synchronous)
                 self.update_table_sync_status_sync(table_name, operation)
+                
+                if self.cdc_replicator:
+                    try:
+                        replication_success = self.cdc_replicator.process_cdc_event(cdc_event, table_name, operation)
+                        if replication_success:
+                            logger.info(f"CDC Replication successful: {operation} on {table_name}")
+                        else:
+                            logger.warning(f"CDC Replication failed: {operation} on {table_name}")
+                    except Exception as e:
+                        logger.error(f"CDC Replication error: {str(e)}")
                 
                 logger.info(f"CDC Event: {operation} on {table_name} (Total: {self.global_stats['cdc_events_processed']})")
                 
         except Exception as e:
             logger.error(f"Failed to process CDC event: {str(e)}")
+    
+    def _extract_table_name_from_event(self, cdc_event: Dict[str, Any]) -> Optional[str]:
+        try:
+            if 'source' in cdc_event and 'table' in cdc_event['source']:
+                return cdc_event['source']['table']
+            
+            if 'payload' in cdc_event and 'source' in cdc_event['payload'] and 'table' in cdc_event['payload']['source']:
+                return cdc_event['payload']['source']['table']
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting table name: {str(e)}")
+            return None
     
     def get_operation_type(self, cdc_event):
         """Extract operation type from Debezium CDC event"""
@@ -149,35 +170,57 @@ class DebeziumKafkaConsumer:
                     "event_data": cdc_event
                 }
                 
-                # Store in Redis list (keep last 1000 events)
-                redis_client = self.data_validator.redis_client
-                redis_client.lpush("cdc_events", json.dumps(event_data))
-                redis_client.ltrim("cdc_events", 0, 999)  # Keep only last 1000 events
+                # Store in Redis list for history
+                key = f"cdc_events:{table_name}"
+                self.data_validator.redis_client.lpush(key, json.dumps(event_data))
+                
+                # Keep only last 100 events per table
+                self.data_validator.redis_client.ltrim(key, 0, 99)
                 
         except Exception as e:
-            logger.error(f"Failed to store CDC event: {str(e)}")
+            logger.error(f"Failed to store CDC event in Redis: {str(e)}")
     
     def update_table_sync_status_sync(self, table_name, operation):
-        """Update table sync status after CDC event (synchronous)"""
+        """Update table sync status based on CDC event (synchronous)"""
         try:
-            # Get current counts for the table
-            if self.data_validator:
-                mysql_count = self.get_table_count_sync('mysql', table_name)
-                postgres_count = self.get_table_count_sync('postgres', table_name)
-                
-                sync_percentage = (postgres_count / mysql_count * 100) if mysql_count > 0 else 0
-                
+            if table_name not in self.global_stats["table_sync_status"]:
                 self.global_stats["table_sync_status"][table_name] = {
-                    "mysql_count": mysql_count,
-                    "postgres_count": postgres_count,
+                    "mysql_count": 0,
+                    "postgres_count": 0,
                     "last_sync": datetime.now().isoformat(),
-                    "sync_percentage": sync_percentage,
-                    "last_operation": operation
+                    "sync_percentage": 0
                 }
+            
+            # Update last sync time
+            self.global_stats["table_sync_status"][table_name]["last_sync"] = datetime.now().isoformat()
+            
+            # Update counts based on operation
+            if operation == "insert":
+                self.global_stats["table_sync_status"][table_name]["mysql_count"] += 1
+            elif operation == "delete":
+                self.global_stats["table_sync_status"][table_name]["mysql_count"] = max(0, 
+                    self.global_stats["table_sync_status"][table_name]["mysql_count"] - 1)
+            
+            # Recalculate sync percentage
+            mysql_count = self.global_stats["table_sync_status"][table_name]["mysql_count"]
+            postgres_count = self.global_stats["table_sync_status"][table_name]["postgres_count"]
+            
+            if mysql_count > 0:
+                sync_percentage = (postgres_count / mysql_count) * 100
+                self.global_stats["table_sync_status"][table_name]["sync_percentage"] = min(100, sync_percentage)
+            else:
+                self.global_stats["table_sync_status"][table_name]["sync_percentage"] = 100
                 
         except Exception as e:
             logger.error(f"Failed to update table sync status: {str(e)}")
     
+    def stop_consuming(self):
+        """Stop consuming CDC events"""
+        self.running = False
+        if self.consumer:
+            self.consumer.close()
+        logger.info("CDC Consumer stopped")
+
     def get_table_count_sync(self, db_type, table_name):
         """Get count of records in a table (synchronous)"""
         try:
@@ -185,14 +228,14 @@ class DebeziumKafkaConsumer:
                 query = f"SELECT COUNT(*) as count FROM `{table_name}`"
                 result = self.data_validator.mysql_client.execute_query(query)
                 return result[0]['count'] if result else 0
-                
+
             elif db_type == 'postgres' and self.data_validator.postgres_client:
                 query = f'SELECT COUNT(*) as count FROM "{table_name}"'
                 result = self.data_validator.postgres_client.execute_query(query)
                 return result[0]['count'] if result else 0
-                
+
             return 0
-            
+
         except Exception as e:
             logger.error(f"Failed to get {db_type} table count for {table_name}: {str(e)}")
             return 0

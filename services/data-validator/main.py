@@ -22,6 +22,7 @@ from models.validation_models import ValidationResult, TableStats, MigrationStat
 from services.data_validator import DataValidator
 from services.dynamic_table_monitor import DynamicTableMonitor  # New Advanced Monitor
 from services.monitoring import MonitoringService
+from services.cdc_replicator import CDCReplicator  # اضافه شده: CDC Replicator
 from utils.logger import setup_logger
 
 # Setup logging
@@ -54,6 +55,7 @@ postgres_client = None
 redis_client = None
 data_validator = None
 cdc_manager = None  # New CDC Manager
+cdc_replicator = None
 monitoring_service = None
 
 # Global stats for dashboard
@@ -63,7 +65,8 @@ global_stats = {
     "connector_status": {"mysql": "disconnected", "postgres": "disconnected"},
     "sync_stats": {"insert": 0, "update": 0, "delete": 0},
     "table_sync_status": {},
-    "monitored_tables": []  # Dynamic table list
+    "monitored_tables": [],  # Dynamic table list
+    "replication_stats": {}
 }
 
 class ValidationRequest(BaseModel):
@@ -88,11 +91,22 @@ async def startup_event():
         mysql_client = MySQLClient()
         postgres_client = PostgreSQLClient()
         
-        # Initialize Redis client
+        # Initialize Redis client (optional)
         logger.info("Connecting to Redis...")
         redis_host = os.getenv('REDIS_HOST', 'redis')
         redis_port = int(os.getenv('REDIS_PORT', '6379'))
-        redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+        
+        if redis_host == 'disabled':
+            logger.info("Redis disabled, running without Redis")
+            redis_client = None
+        else:
+            try:
+                redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+                redis_client.ping()  # Test connection
+                logger.info("Redis connected successfully")
+            except Exception as e:
+                logger.warning(f"Redis connection failed: {str(e)}, running without Redis")
+                redis_client = None
         
         # Test connections
         mysql_status = mysql_client.test_connection()
@@ -105,19 +119,30 @@ async def startup_event():
         data_validator = DataValidator(mysql_client, postgres_client, redis_client)
         monitoring_service = MonitoringService(redis_client, mysql_client, postgres_client)
         
-        # Initialize CDC Manager
-        logger.info("Setting up Dynamic CDC Manager...")
-        cdc_manager = DynamicTableMonitor(
+        # Initialize CDC Replicator first
+        logger.info("Setting up CDC Replicator...")
+        cdc_replicator = CDCReplicator(
             mysql_client=mysql_client,
             postgres_client=postgres_client,
             redis_client=redis_client,
             global_stats=global_stats
         )
         
+        # Initialize CDC Manager with replicator
+        logger.info("Setting up Dynamic CDC Manager...")
+        cdc_manager = DynamicTableMonitor(
+            mysql_client=mysql_client,
+            postgres_client=postgres_client,
+            redis_client=redis_client,
+            global_stats=global_stats,
+            cdc_replicator=cdc_replicator  # اضافه شده: CDC Replicator
+        )
+        
         # Set global variables
         globals()['data_validator'] = data_validator
         globals()['monitoring_service'] = monitoring_service
         globals()['cdc_manager'] = cdc_manager
+        globals()['cdc_replicator'] = cdc_replicator
         
         # Start background tasks
         start_background_tasks()
@@ -346,6 +371,45 @@ async def health_check():
         "last_cdc_event": global_stats["last_cdc_event"],
         "timestamp": datetime.now().isoformat()
     }
+
+@app.get("/replication/stats")
+async def get_replication_stats():
+    try:
+        if cdc_replicator:
+            replication_stats = cdc_replicator.get_replication_stats()
+            
+            return {
+                "status": "active",
+                "replication_stats": replication_stats,
+                "global_stats": global_stats.get("replication_stats", {}),
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "inactive",
+                "message": "CDC Replicator not initialized",
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        logger.error(f"Error getting replication stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get replication stats: {str(e)}")
+
+@app.post("/replication/reset-stats")
+async def reset_replication_stats():
+    """ریست آمار replication"""
+    try:
+        if cdc_replicator:
+            cdc_replicator.reset_stats()
+            return {
+                "status": "success",
+                "message": "Replication stats reset successfully",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=404, detail="CDC Replicator not available")
+    except Exception as e:
+        logger.error(f"Error resetting replication stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset replication stats: {str(e)}")
 
 @app.get("/debezium/status")
 async def get_debezium_status():
