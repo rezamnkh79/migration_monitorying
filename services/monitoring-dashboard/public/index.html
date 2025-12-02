@@ -7,63 +7,389 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Migration Dashboard - MySQL to PostgreSQL - v2.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Arial', sans-serif; }
-        .status-healthy { color: #28a745; }
-        .status-warning { color: #ffc107; }
-        .status-error { color: #dc3545; }
-        .metric-card { min-height: 120px; }
-        .real-time-indicator { 
-            width: 10px; 
-            height: 10px; 
-            border-radius: 50%; 
-            display: inline-block; 
-            margin-right: 5px;
-            animation: pulse 2s infinite;
-        }
-        .real-time-indicator.active { background-color: #28a745; }
-        .real-time-indicator.inactive { background-color: #dc3545; }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
         
-        .log-entry { 
-            font-family: 'Courier New', monospace; 
-            font-size: 0.9em;
-            border-left: 3px solid #007bff;
-            padding-left: 10px;
-            margin-bottom: 5px;
+        .container-fluid {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            margin: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 0;
+            overflow: hidden;
         }
         
+        /* Header Styling */
+        header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%) !important;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+        }
+        
+        header h1 {
+            position: relative;
+            z-index: 2;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Status Cards */
+        .metric-card {
+            min-height: 140px;
+            border: none !important;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.2) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+        }
+        
+        .metric-card:hover::before {
+            opacity: 1;
+        }
+        
+        .metric-card .card-body {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .metric-card i {
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+        
+        /* Main Cards */
+        .card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+        }
+        
+        .card:hover {
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: 16px 16px 0 0 !important;
+            padding: 1.5rem;
+        }
+        
+        /* Buttons */
+        .btn {
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-lg {
+            padding: 12px 30px;
+            font-size: 1.1rem;
+        }
+        
+        /* Table Styling */
+        .table {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .table thead th {
+            background: linear-gradient(135deg, #495057 0%, #6c757d 100%);
+            color: white;
+            border: none;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.85rem;
+        }
+        
+        .table tbody tr {
+            transition: all 0.2s ease;
+        }
+        
+        .table tbody tr:hover {
+            background: rgba(102, 126, 234, 0.08);
+            transform: scale(1.01);
+        }
+        
+        /* Progress Circle */
         .progress-circle {
-            width: 80px;
-            height: 80px;
+            width: 120px;
+            height: 120px;
             border-radius: 50%;
-            background: conic-gradient(#28a745 0deg, #28a745 var(--progress, 0deg), #e9ecef var(--progress, 0deg));
+            background: conic-gradient(
+                #667eea 0deg, 
+                #667eea var(--progress, 0deg), 
+                rgba(233, 236, 239, 0.3) var(--progress, 0deg)
+            );
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
         }
         
         .progress-circle::before {
             content: '';
             position: absolute;
-            width: 60px;
-            height: 60px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
             background: white;
+            box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         
         .progress-text {
             position: relative;
-            font-weight: bold;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Statistics Cards */
+        .text-center .card {
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.95);
+        }
+        
+        .text-center .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+        }
+        
+        .text-center .card i {
+            transition: all 0.3s ease;
+        }
+        
+        .text-center .card:hover i {
+            transform: scale(1.1);
+        }
+        
+        /* Badges */
+        .badge {
+            border-radius: 8px;
+            font-weight: 600;
+            padding: 6px 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Real-time indicator */
+        .real-time-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+        }
+        
+        .real-time-indicator.active {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        
+        .real-time-indicator.inactive {
+            background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+            box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+        }
+        
+        /* Form Controls */
+        .form-select {
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s ease;
+        }
+        
+        .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        /* Alert */
+        .alert {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+        
+        .alert-success {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(32, 201, 151, 0.1) 100%);
+            border-left: 4px solid #28a745;
+        }
+        
+        /* Log entries */
+        .log-entry {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            border-left: 3px solid #667eea;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 0 8px 8px 0;
+            transition: all 0.2s ease;
+        }
+        
+        .log-entry:hover {
+            background: rgba(102, 126, 234, 0.05);
+            transform: translateX(4px);
+        }
+        
+        /* Pagination */
+        .pagination .page-link {
+            border-radius: 8px;
+            margin: 0 2px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+            color: #495057;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination .page-item.active .page-link {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .pagination .page-link:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        /* Status indicators in table */
+        .table-success {
+            background: linear-gradient(135deg, rgba(40, 167, 69, 0.1) 0%, rgba(32, 201, 151, 0.1) 100%) !important;
+        }
+        
+        .table-warning {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 171, 0, 0.1) 100%) !important;
+        }
+        
+        .table-danger {
+            background: linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(231, 76, 60, 0.1) 100%) !important;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        }
+        
+        /* Animation for loading */
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .card {
+            animation: fadeInUp 0.6s ease-out;
+        }
+        
+        /* Toast notifications */
+        .toast {
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            border: none;
+        }
+        
+        /* Dark mode accents */
+        .bg-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%) !important;
+        }
+        
+        .bg-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+        }
+        
+        .bg-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%) !important;
+        }
+        
+        .bg-secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%) !important;
         }
     </style>
 </head>
@@ -75,7 +401,7 @@
                 <div class="col">
                     <h1 class="mb-0">
                         <i class="fas fa-database me-2"></i>
-                        MySQL to PostgreSQL Migration Dashboard
+                        Migration Monitoring Dashboard
                     </h1>
                 </div>
                 <div class="col-auto">
@@ -86,6 +412,7 @@
             </div>
         </header>
 
+        <div class="px-4 pb-4">
         <!-- Status Cards -->
         <div class="row mb-4">
             <div class="col-md-3">
@@ -133,16 +460,12 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-sync-alt me-2"></i>
-                            Debezium CDC Status & Manual Sync Check
+                            AdTrace Migration Dashboard
                         </h5>
                         <div>
-                            <button id="debeziumStatusBtn" class="btn btn-info me-2" onclick="checkDebeziumStatus()">
-                                <i class="fas fa-stream me-2"></i>
-                                Check CDC Status
-                            </button>
-                            <button id="syncCheckBtn" class="btn btn-primary" onclick="performSyncCheck()">
-                                <i class="fas fa-check-double me-2"></i>
-                                Check Sync Status
+                            <button id="reloadAllBtn" class="btn btn-primary btn-lg" onclick="reloadEverything()">
+                                <i class="fas fa-sync-alt me-2"></i>
+                                Reload All
                             </button>
                         </div>
                     </div>
@@ -177,15 +500,8 @@
                             </div>
                         </div>
                         
-                        <div id="syncCheckResult" class="d-none">
-                            <div class="alert alert-info">
-                                <h6><i class="fas fa-info-circle me-2"></i>Sync Check Results</h6>
-                                <div id="syncCheckContent"></div>
-                            </div>
-                        </div>
                         <p class="text-muted mb-0">
-                            Monitor real-time CDC events from Debezium and manually check if MySQL and PostgreSQL data are synchronized. 
-                            This compares row counts and shows sample data from each table.
+                            AdTrace Migration CDC is working! All changes from MySQL are captured in the <code>adtrace_migration</code> topic.
                         </p>
                     </div>
                 </div>
@@ -196,11 +512,27 @@
         <div class="row mb-4">
             <div class="col-md-8">
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-chart-line me-2"></i>
                             Table Migration Status
                         </h5>
+                        <div class="d-flex gap-2">
+                            <select id="tableFilter" class="form-select form-select-sm" style="width: auto;" onchange="applyTableFilter()">
+                                <option value="all">All Tables</option>
+                                <option value="synced">Synced</option>
+                                <option value="unsynced">Not Synced</option>
+                                <option value="empty">Empty</option>
+                                <option value="errors">Errors</option>
+                            </select>
+                            <select id="tablesPerPage" class="form-select form-select-sm" style="width: auto;" onchange="changeTablePageSize()">
+                                <option value="10" selected>10 per page</option>
+                                <option value="20">20 per page</option>
+                                <option value="40">40 per page</option>
+                                <option value="50">50 per page</option>
+                                <option value="all">Show All</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -221,6 +553,18 @@
                                 </tbody>
                             </table>
                         </div>
+                        
+                        <!-- Pagination Controls -->
+                        <nav aria-label="Table pagination" id="tablePaginationNav" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="text-muted">
+                                    <span id="paginationInfo">Showing 1-10 of 0 tables</span>
+                                </div>
+                                <ul class="pagination pagination-sm mb-0" id="tablePagination">
+                                    <!-- Pagination buttons will be generated here -->
+                                </ul>
+                            </div>
+                        </nav>
                     </div>
                 </div>
             </div>
@@ -289,30 +633,22 @@
                 <div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">
-                            <i class="fas fa-cogs me-2"></i>
-                            Actions
+                            <i class="fas fa-info-circle me-2"></i>
+                            System Status
                         </h5>
                     </div>
                     <div class="card-body">
-                        <button class="btn btn-primary mb-2" onclick="triggerValidation()">
-                            <i class="fas fa-check me-2"></i>
-                            Quick Validation
-                        </button>
-                        <button class="btn btn-warning mb-2" onclick="triggerFullValidation()">
-                            <i class="fas fa-check-double me-2"></i>
-                            Full Validation
-                        </button>
-                        <button class="btn btn-info mb-2" onclick="refreshData()">
-                            <i class="fas fa-sync me-2"></i>
-                            Refresh Data
-                        </button>
-                        <div class="mt-3">
-                            <h6>Add Test Data:</h6>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="addTestUser()">
-                                <i class="fas fa-user-plus me-1"></i>
-                                Test User
-                            </button>
+                        <div class="alert alert-success">
+                            <h6><i class="fas fa-check-circle me-2"></i>AdTrace Migration System</h6>
+                            <p class="mb-0">
+                                Connector: <code>adtrace-migration-working</code><br>
+                                Topic: <code>adtrace_migration</code><br>
+                                All MySQL changes are captured in real-time
+                            </p>
                         </div>
+                        <p class="text-muted">
+                            The system is running and capturing all database changes from MySQL to the Kafka topic.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -331,6 +667,7 @@
                     </div>
                 </div>
             </div>
+        </div>
         </div>
     </div>
 
@@ -459,29 +796,33 @@
             console.log('Is array?', Array.isArray(mysqlTableList));
             console.log('Length?', mysqlTableList.length);
             
-            // Use MySQL table list if available and not empty, otherwise use fallback
+            // Use MySQL table list if available and not empty, otherwise show empty state
             let tables;
             if (mysqlTableList && Array.isArray(mysqlTableList) && mysqlTableList.length > 0) {
-                // Show first 10 tables for performance (reduced from 20)
-                tables = mysqlTableList.slice(0, 10);
-                console.log('✅ USING DYNAMIC TABLES:', tables.length, 'tables');
+                // Use all tables dynamically - no limits or hardcoding
+                tables = mysqlTableList;
+                console.log('USING DYNAMIC TABLES:', tables.length, 'tables');
                 console.log('First 5 dynamic tables:', tables.slice(0, 5));
             } else {
-                tables = ['users', 'products', 'orders', 'order_items'];
-                console.log('❌ USING FALLBACK TABLES');
+                // No hardcoded fallback - show empty state if no tables found
+                tables = [];
+                console.log('NO TABLES FOUND - Database might be disconnected');
             }
 
-            let html = '';
+            // Prepare table data for pagination system
+            allTablesData = [];
             let syncedTables = 0;
 
-            console.log('Processing tables:', tables);
+            console.log('Processing tables:', tables.length, 'total tables');
 
             tables.forEach((table, index) => {
                 const mysqlCount = mysqlTables[table] || 0;
                 const postgresCount = postgresTables[table] || 0;
                 const isSync = mysqlCount === postgresCount;
                 
-                console.log(`Table ${index + 1}: ${table} - MySQL: ${mysqlCount}, PostgreSQL: ${postgresCount}, Synced: ${isSync}`);
+                if (index < 5) { // Only log first 5 for performance
+                    console.log(`Table ${index + 1}: ${table} - MySQL: ${mysqlCount}, PostgreSQL: ${postgresCount}, Synced: ${isSync}`);
+                }
                 
                 if (isSync && mysqlCount > 0) syncedTables++;
 
@@ -489,25 +830,24 @@
                     '<i class="fas fa-check-circle text-success"></i>' : 
                     '<i class="fas fa-exclamation-triangle text-warning"></i>';
 
-                html += `
-                    <tr>
-                        <td><strong>${table}</strong></td>
-                        <td>${mysqlCount.toLocaleString('en-US')}</td>
-                        <td>${postgresCount.toLocaleString('en-US')}</td>
-                        <td>${statusIcon} ${isSync ? 'Synced' : 'Out of Sync'}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${table}')" title="View latest 5 records">
-                                <i class="fas fa-eye"></i> Latest
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                // Add to allTablesData for pagination
+                allTablesData.push({
+                    tableName: table,
+                    mysqlCount: mysqlCount,
+                    postgresCount: postgresCount,
+                    isSync: isSync,
+                    hasData: mysqlCount > 0 || postgresCount > 0,
+                    statusIcon: statusIcon,
+                    statusText: isSync ? 'Synced' : 'Out of Sync',
+                    statusClass: isSync ? 'table-success' : 'table-warning'
+                });
             });
 
-            console.log('Generated HTML length:', html.length);
-            console.log('Setting innerHTML...');
+            console.log('Total tables processed:', allTablesData.length);
+            console.log('Setting up pagination with', tablesPerPage, 'tables per page');
             
-            tablesStatus.innerHTML = html;
+            // Render the paginated table instead of generating static HTML
+            renderTablePage();
 
             // Update progress
             const progress = (syncedTables / tables.length) * 100;
@@ -760,7 +1100,7 @@
             contentDiv.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Checking sync status...</div>';
             
             try {
-                const response = await fetch('http://localhost:8000/sync-check', {
+                const response = await fetch("/api/sync-check", {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -798,38 +1138,58 @@
 
         // Debezium Status Check Function
         async function checkDebeziumStatus() {
-            const btn = document.getElementById('debeziumStatusBtn');
-            
-            // Show loading state
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Checking...';
-            
             try {
-                const response = await fetch('http://localhost:8000/debezium/status', {
+                // First check the specific connector status
+                const connectorResponse = await fetch('/api/connector-status/adtrace-migration-working', {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' }
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                if (connectorResponse.ok) {
+                    const connectorData = await connectorResponse.json();
+                    const connectorState = connectorData.connector?.state || 'unknown';
+                    const tasks = connectorData.tasks || [];
+                    
+                    // Update MySQL connector status based on our working connector
+                    updateConnectorStatusBadge('mysqlConnectorStatus', connectorState);
+                    
+                    addEventToLog(`Connector adtrace-migration-working: ${connectorState}`);
                 }
                 
-                const data = await response.json();
+                // Also get full debezium status
+                const response = await fetch("/api/debezium/status", {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
                 
-                if (data.cdc_stats) {
-                    updateCDCStatus(data.cdc_stats);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.global_stats) {
+                        // Update CDC events count
+                        document.getElementById('cdcEventsCount').textContent = 
+                            (data.global_stats.cdc_events_processed || 0).toLocaleString('en-US');
+                        
+                        // Update last CDC event
+                        if (data.global_stats.last_cdc_event) {
+                            const lastEvent = data.global_stats.last_cdc_event;
+                            const eventText = `${lastEvent.operation || 'unknown'} on ${lastEvent.table || 'unknown'}`;
+                            document.getElementById('lastCdcEvent').textContent = eventText;
+                        }
+                        
+                        // Update connector statuses if available
+                        if (data.global_stats.connector_status) {
+                            updateConnectorStatusBadge('mysqlConnectorStatus', data.global_stats.connector_status.mysql);
+                            updateConnectorStatusBadge('postgresConnectorStatus', data.global_stats.connector_status.postgres);
+                        }
+                    }
                 }
                 
-                showNotification('CDC status updated', 'success');
                 addEventToLog('Debezium status checked');
                 
             } catch (error) {
                 console.error('CDC status check error:', error);
-                showNotification('Failed to check CDC status: ' + error.message, 'danger');
-            } finally {
-                // Reset button
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-stream me-2"></i>Check CDC Status';
+                addEventToLog('Failed to check CDC status: ' + error.message);
             }
         }
 
@@ -908,7 +1268,7 @@
             
             // Display MySQL tables
             if (data.mysql_tables && data.mysql_tables.length > 0) {
-                data.mysql_tables.slice(0, 10).forEach(table => {
+                data.mysql_tables.forEach(table => {
                     const count = data.mysql_counts?.[table.name] || 'N/A';
                     const samples = table.sample_data || [];
                     const sampleText = samples.length > 0 ? `${samples.length} records` : 'No data';
@@ -946,7 +1306,7 @@
             
             // Display PostgreSQL tables
             if (data.postgres_tables && data.postgres_tables.length > 0) {
-                data.postgres_tables.slice(0, 10).forEach(table => {
+                data.postgres_tables.forEach(table => {
                     const count = data.postgres_counts?.[table.name] || 'N/A';
                     const samples = table.sample_data || [];
                     const sampleText = samples.length > 0 ? `${samples.length} records` : 'No data';
@@ -1009,7 +1369,7 @@
             showNotification('Fetching real data from databases...', 'info');
             
             // Use the sync-check endpoint to get real data
-            fetch('http://localhost:8000/sync-check', {
+            fetch("/api/sync-check", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -1052,7 +1412,8 @@
             const sortedTables = Array.from(allTableNames).sort();
             console.log(`Found ${sortedTables.length} unique tables`);
             
-            let html = '';
+            // Prepare table data for pagination system
+            allTablesData = [];
             let syncedTables = 0;
             let totalTablesWithData = 0;
             
@@ -1087,45 +1448,35 @@
                     statusClass = 'table-success';
                 } else {
                     statusIcon = '<i class="fas fa-exclamation-triangle text-warning"></i>';
-                    statusText = 'Out of Sync';
+                    statusText = 'Different';
                     statusClass = 'table-warning';
                 }
                 
-                // Format counts
-                const mysqlDisplay = mysqlCount === "ERROR" ? "ERROR" : 
-                                   typeof mysqlCount === 'number' ? mysqlCount.toLocaleString('en-US') : 
-                                   mysqlCount || '0';
-                const postgresDisplay = postgresCount === "ERROR" ? "ERROR" : 
-                                       typeof postgresCount === 'number' ? postgresCount.toLocaleString('en-US') : 
-                                       postgresCount || '0';
-                
-                html += `
-                    <tr class="${statusClass}">
-                        <td><strong>${tableName}</strong></td>
-                        <td><span class="badge bg-primary">${mysqlDisplay}</span></td>
-                        <td><span class="badge bg-success">${postgresDisplay}</span></td>
-                        <td>${statusIcon} ${statusText}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${tableName}')" title="View latest 5 records">
-                                <i class="fas fa-eye"></i> Latest
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                // Add to allTablesData for pagination
+                allTablesData.push({
+                    tableName,
+                    mysqlCount,
+                    postgresCount,
+                    isSync,
+                    hasData,
+                    statusIcon,
+                    statusText,
+                    statusClass
+                });
             });
             
-            if (html === '') {
-                html = '<tr><td colspan="5" class="text-center text-muted">No table data available</td></tr>';
-            }
+            console.log(`Main table updated: ${syncedTables}/${totalTablesWithData} synced (${totalTablesWithData > 0 ? ((syncedTables / totalTablesWithData) * 100).toFixed(1) : 0}%)`);
             
-            tablesStatus.innerHTML = html;
-            
-            // Update progress circle with real data
+            // Update progress circle
             const progress = totalTablesWithData > 0 ? (syncedTables / totalTablesWithData) * 100 : 0;
             updateProgressCircle(progress);
+            
+            // Update progress details
+            const progressDetails = document.getElementById('progressDetails');
             progressDetails.textContent = `${syncedTables} of ${totalTablesWithData} tables synced`;
             
-            console.log(`✅ Main table updated: ${syncedTables}/${totalTablesWithData} synced (${progress.toFixed(1)}%)`);
+            // Render the paginated table
+            renderTablePage();
         }
 
         function addTestUser() {
@@ -1135,6 +1486,325 @@
             showNotification(message, 'info');
             addEventToLog(message);
         }
+
+        // Pagination variables (simplified)
+        let allTablesData = [];
+        let currentPage = 1;
+        let tablesPerPage = 10;
+        
+        // Table pagination functions (simplified)
+        function changeTablePageSize() {
+            const selector = document.getElementById('tablesPerPage');
+            tablesPerPage = selector.value === 'all' ? Infinity : parseInt(selector.value);
+            currentPage = 1;
+            renderTablePage();
+        }
+        
+        function renderTablePage() {
+            // Apply current filter
+            const filterSelect = document.getElementById('tableFilter');
+            const currentFilter = filterSelect ? filterSelect.value : 'all';
+            
+            let filteredTables = allTablesData;
+            
+            if (currentFilter === 'synced') {
+                filteredTables = allTablesData.filter(table => table.isSync && table.hasData);
+            } else if (currentFilter === 'unsynced') {
+                filteredTables = allTablesData.filter(table => !table.isSync && table.hasData);
+            } else if (currentFilter === 'empty') {
+                filteredTables = allTablesData.filter(table => !table.hasData);
+            } else if (currentFilter === 'errors') {
+                filteredTables = allTablesData.filter(table => table.mysqlCount === "ERROR" || table.postgresCount === "ERROR");
+            }
+
+            let currentTables;
+            let totalPages;
+            
+            if (tablesPerPage === Infinity) {
+                // Show all filtered tables
+                currentTables = filteredTables;
+                totalPages = 1;
+            } else {
+                // Paginate filtered tables
+                totalPages = Math.ceil(filteredTables.length / tablesPerPage);
+                const startIndex = (currentPage - 1) * tablesPerPage;
+                const endIndex = startIndex + tablesPerPage;
+                currentTables = filteredTables.slice(startIndex, endIndex);
+            }
+            
+            // Render main table
+            renderMainTable(currentTables);
+            
+            // Update pagination controls with filtered count
+            updatePaginationControls(filteredTables.length, totalPages);
+        }
+        
+        function renderMainTable(tables) {
+            const tbody = document.getElementById('tablesStatus');
+            
+            if (tables.length === 0) {
+                const filterSelect = document.getElementById('tableFilter');
+                const currentFilter = filterSelect ? filterSelect.value : 'all';
+                
+                let message = 'No tables found';
+                if (currentFilter === 'synced') {
+                    message = 'No synced tables found';
+                } else if (currentFilter === 'unsynced') {
+                    message = 'No unsynced tables found';
+                } else if (currentFilter === 'empty') {
+                    message = 'No empty tables found';
+                } else if (currentFilter === 'errors') {
+                    message = 'No tables with errors found';
+                }
+                
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">${message}</td></tr>`;
+                return;
+            }
+            
+            let html = '';
+            tables.forEach(table => {
+                // Format counts properly like in the main table
+                const mysqlDisplay = table.mysqlCount === "ERROR" ? "ERROR" : 
+                                   (table.mysqlCount || 0).toString();
+                const postgresDisplay = table.postgresCount === "ERROR" ? "ERROR" : 
+                                       (table.postgresCount || 0).toString();
+                
+                html += `
+                    <tr class="${table.statusClass}">
+                        <td><strong>${table.tableName}</strong></td>
+                        <td class="text-center"><span class="badge bg-primary">${mysqlDisplay}</span></td>
+                        <td class="text-center"><span class="badge bg-success">${postgresDisplay}</span></td>
+                        <td class="text-center">${table.statusIcon} ${table.statusText}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showLatestRecords('${table.tableName}')" title="View latest 5 records">
+                                <i class="fas fa-eye"></i> Latest
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+        
+        function updatePaginationControls(totalItems, totalPages) {
+            const paginationNav = document.getElementById('tablePaginationNav');
+            const paginationInfo = document.getElementById('paginationInfo');
+            const pagination = document.getElementById('tablePagination');
+            
+            // Hide pagination if "Show All" is selected or only one page
+            if (tablesPerPage === Infinity || totalPages <= 1) {
+                paginationNav.style.display = 'none';
+                return;
+            }
+            
+            // Update info
+            const startItem = (currentPage - 1) * tablesPerPage + 1;
+            const endItem = Math.min(currentPage * tablesPerPage, totalItems);
+            paginationInfo.textContent = `Showing ${startItem}-${endItem} of ${totalItems} tables`;
+            
+            // Generate pagination buttons
+            let paginationHtml = '';
+            
+            // Previous button
+            if (currentPage > 1) {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a>
+                    </li>
+                `;
+            }
+            
+            // Page numbers
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                    </li>
+                `;
+            }
+            
+            // Next button
+            if (currentPage < totalPages) {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a>
+                    </li>
+                `;
+            }
+            
+            pagination.innerHTML = paginationHtml;
+            paginationNav.style.display = 'block';
+        }
+        
+        function changePage(page) {
+            currentPage = page;
+            renderTablePage();
+        }
+
+        function reloadEverything() {
+            const btn = document.getElementById('reloadAllBtn');
+            
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Reloading...';
+            
+            showNotification('Reloading all data...', 'info');
+            addEventToLog('Reloading all dashboard data');
+            
+            // 1. Refresh main table data
+            refreshData();
+            
+            // 2. Check CDC status and connector info
+            checkDebeziumStatus();
+            
+            // 3. Request fresh socket data
+            socket.emit('requestUpdate');
+            
+            // 4. Update service status cards
+            updateServiceStatusCards();
+            
+            // 5. Refresh sync statistics
+            refreshSyncStatistics();
+            
+            // Reset button after delay
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Reload All';
+                showNotification('All data reloaded successfully!', 'success');
+                addEventToLog('Dashboard reload completed');
+            }, 4000);
+        }
+
+        // New function to update service status cards
+        async function updateServiceStatusCards() {
+            try {
+                // Check all services status using the correct health endpoint
+                const response = await fetch("/api/health", {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update service status based on health response
+                    document.getElementById('mysqlStatus').textContent = 
+                        data.mysql === 'connected' ? 'Connected' : 'Disconnected';
+                    document.getElementById('postgresStatus').textContent = 
+                        data.postgres === 'connected' ? 'Connected' : 'Disconnected';
+                    document.getElementById('redisStatus').textContent = 
+                        data.redis === 'connected' ? 'Connected' : 'Disconnected';
+                    
+                    // Update CDC connector status
+                    if (data.debezium) {
+                        updateConnectorStatusBadge('mysqlConnectorStatus', data.debezium.mysql_connector);
+                        updateConnectorStatusBadge('postgresConnectorStatus', data.debezium.postgres_connector);
+                    }
+                    
+                    // Update CDC events count
+                    document.getElementById('cdcEventsCount').textContent = 
+                        (data.cdc_events_processed || 0).toLocaleString('en-US');
+                    
+                    // Update last CDC event
+                    if (data.last_cdc_event) {
+                        const lastEvent = data.last_cdc_event;
+                        const eventText = `${lastEvent.operation || 'unknown'} on ${lastEvent.table || 'unknown'}`;
+                        document.getElementById('lastCdcEvent').textContent = eventText;
+                    }
+                    
+                    addEventToLog('Service status updated');
+                }
+            } catch (error) {
+                console.log('Service status check failed:', error);
+                // Set all to disconnected on error
+                document.getElementById('mysqlStatus').textContent = 'Disconnected';
+                document.getElementById('postgresStatus').textContent = 'Disconnected';
+                document.getElementById('redisStatus').textContent = 'Disconnected';
+                document.getElementById('kafkaStatus').textContent = 'Disconnected';
+            }
+        }
+
+        // New function to refresh sync statistics
+        async function refreshSyncStatistics() {
+            try {
+                // Get latest metrics which include sync stats
+                const response = await fetch("/api/metrics", {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.sync_stats) {
+                        updateSyncStats({sync_stats: data.sync_stats});
+                        addEventToLog('Sync statistics updated');
+                    }
+                    
+                    // Also update Kafka status if available
+                    if (data.cdc_stats) {
+                        updateCDCStatus(data.cdc_stats);
+                    }
+                    
+                } else {
+                    // Fallback: try to get stats from kafka status endpoint
+                    const fallbackResponse = await fetch("/api/kafka-status", {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    
+                    if (fallbackResponse.ok) {
+                        const fallbackData = await fallbackResponse.json();
+                        
+                        // Update Kafka status
+                        document.getElementById('kafkaStatus').textContent = 
+                            fallbackData.is_running ? 'Active' : 'Inactive';
+                        
+                        // Update success rate
+                        if (fallbackData.success_rate !== undefined) {
+                            const rate = Math.round(fallbackData.success_rate * 100);
+                            document.getElementById('successRate').textContent = `${rate}%`;
+                        }
+                        
+                        addEventToLog('Sync statistics updated (fallback)');
+                    }
+                }
+            } catch (error) {
+                console.log('Sync statistics refresh failed:', error);
+                // Reset to 0 if failed
+                document.getElementById('insertCount').textContent = '0';
+                document.getElementById('updateCount').textContent = '0';
+                document.getElementById('deleteCount').textContent = '0';
+                document.getElementById('successRate').textContent = '100%';
+            }
+        }
+
+        // Function to apply table filter
+        function applyTableFilter() {
+            const filter = document.getElementById('tableFilter').value;
+            let filteredTables = allTablesData;
+
+            if (filter === 'synced') {
+                filteredTables = allTablesData.filter(table => table.isSync && table.hasData);
+            } else if (filter === 'unsynced') {
+                filteredTables = allTablesData.filter(table => !table.isSync && table.hasData);
+            } else if (filter === 'empty') {
+                filteredTables = allTablesData.filter(table => table.hasData === false);
+            } else if (filter === 'errors') {
+                filteredTables = allTablesData.filter(table => table.mysqlCount === "ERROR" || table.postgresCount === "ERROR");
+            }
+
+            currentPage = 1; // Reset to first page when filtering
+            renderTablePage();
+        }
+
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', () => {

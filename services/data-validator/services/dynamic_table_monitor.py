@@ -3,6 +3,7 @@ import logging
 import requests
 import threading
 import time
+import os
 from datetime import datetime
 from typing import Dict, List, Set, Any, Optional
 from kafka import KafkaConsumer, KafkaAdminClient
@@ -24,16 +25,26 @@ class DynamicTableMonitor:
     """
     
     def __init__(self, mysql_client: MySQLClient, postgres_client: PostgreSQLClient, 
-                 redis_client, global_stats: Dict[str, Any]):
+                 redis_client, global_stats: Dict[str, Any], cdc_replicator=None):
         self.mysql = mysql_client
         self.postgres = postgres_client
         self.redis = redis_client
         self.global_stats = global_stats
+        self.cdc_replicator = cdc_replicator  # Added: CDC Replicator
         
-        # Configuration
-        self.kafka_bootstrap_servers = ['kafka:29092']
-        self.connect_url = "http://connect:8083"
+        # Configuration - Get from environment variables
+        kafka_bootstrap = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
+        self.kafka_bootstrap_servers = kafka_bootstrap.split(',')
+        self.connect_url = os.getenv("KAFKA_CONNECT_URL", "http://connect:8083")
         self.database_name = self._get_database_name()
+        
+        # MySQL connection settings from environment
+        self.mysql_host = os.getenv('MYSQL_HOST', 'mysql')
+        self.mysql_port = os.getenv('MYSQL_PORT', '3306')
+        self.mysql_user = os.getenv('MYSQL_USER', 'debezium')
+        self.mysql_password = os.getenv('MYSQL_PASSWORD', 'dbz')
+        
+        logger.info(f"Table Monitor initialized for MySQL: {self.mysql_host}:{self.mysql_port}/{self.database_name}")
         
         # Dynamic monitoring state
         self.current_tables: Set[str] = set()
@@ -51,7 +62,7 @@ class DynamicTableMonitor:
             'migration_log', 'schema_migrations', 'flyway_schema_history'
         ]
         
-        logger.info("🔍 Dynamic Table Monitor initialized")
+        logger.info("Dynamic Table Monitor initialized")
         
     def _get_database_name(self):
         """Get current database name dynamically"""
@@ -61,20 +72,19 @@ class DynamicTableMonitor:
                 if result and len(result) > 0:
                     db_name = result[0].get('DATABASE()')
                     if db_name:
-                        logger.info(f"📋 Detected database: {db_name}")
+                        logger.info(f"Detected database: {db_name}")
                         return db_name
             
             # Fallback to environment variable
-            import os
             return os.getenv('MYSQL_DATABASE', 'inventory')
         except Exception as e:
-            logger.warning(f"⚠️ Could not detect database name: {e}")
+            logger.warning(f"Could not detect database name: {e}")
             return 'inventory'
     
     def start_monitoring(self):
         """Start comprehensive table monitoring"""
         try:
-            logger.info("🚀 Starting Dynamic Table Monitoring System...")
+            logger.info("Starting Dynamic Table Monitoring System...")
             
             # Initial table discovery
             self._discover_current_tables()
@@ -90,16 +100,16 @@ class DynamicTableMonitor:
             # Start CDC event monitoring
             self._start_cdc_monitoring()
             
-            logger.info("✅ Dynamic Table Monitoring System started successfully")
+            logger.info("Dynamic Table Monitoring System started successfully")
             
         except Exception as e:
-            logger.error(f"❌ Failed to start table monitoring: {str(e)}")
+            logger.error(f"Failed to start table monitoring: {str(e)}")
             raise
     
     def _discover_current_tables(self):
         """Discover all current tables in MySQL"""
         try:
-            logger.info("🔍 Discovering current MySQL tables...")
+            logger.info("Discovering current MySQL tables...")
             
             mysql_tables = self.mysql.get_table_list() if self.mysql else []
             
@@ -120,20 +130,20 @@ class DynamicTableMonitor:
             removed_tables = old_tables - self.current_tables
             
             if new_tables:
-                logger.info(f"🆕 New tables discovered: {list(new_tables)}")
+                logger.info(f"New tables discovered: {list(new_tables)}")
             if removed_tables:
-                logger.info(f"🗑️ Tables removed: {list(removed_tables)}")
+                logger.info(f"Tables removed: {list(removed_tables)}")
             
             # Update global stats
             self.global_stats["monitored_tables"] = list(self.current_tables)
             self.global_stats["total_tables"] = len(self.current_tables)
             
-            logger.info(f"📊 Currently monitoring {len(self.current_tables)} tables: {list(self.current_tables)}")
+            logger.info(f"Currently monitoring {len(self.current_tables)} tables: {list(self.current_tables)}")
             
             return new_tables, removed_tables
             
         except Exception as e:
-            logger.error(f"❌ Table discovery failed: {str(e)}")
+            logger.error(f"Table discovery failed: {str(e)}")
             return set(), set()
     
     def _should_monitor_table(self, table_name: str) -> bool:
@@ -154,18 +164,41 @@ class DynamicTableMonitor:
         
         return True
     
+    def _build_dynamic_table_include_list(self, database_name: str) -> str:
+        """Build table.include.list dynamically from discovered tables"""
+        try:
+            if not self.current_tables:
+                # Re-discover tables if list is empty
+                self._discover_current_tables()
+            
+            if not self.current_tables:
+                logger.warning("No tables discovered for CDC monitoring")
+                return ""
+            
+            # Build the table include list in format: database.table1,database.table2,...
+            table_list = [f"{database_name}.{table}" for table in sorted(self.current_tables)]
+            table_include_string = ",".join(table_list)
+            
+            logger.info(f"Built dynamic table include list for {len(self.current_tables)} tables")
+            logger.debug(f"Table list: {table_include_string}")
+            return table_include_string
+            
+        except Exception as e:
+            logger.error(f"Failed to build dynamic table list: {str(e)}")
+            return ""
+    
     def _get_table_columns(self, table_name: str) -> List[str]:
         """Get column names for a table"""
         try:
             schema = self.mysql.get_table_schema(table_name)
             return [col.get('Field', '') for col in schema]
         except Exception as e:
-            logger.warning(f"⚠️ Could not get schema for {table_name}: {e}")
+            logger.warning(f"Could not get schema for {table_name}: {e}")
             return []
     
     def _table_discovery_loop(self):
         """Continuous loop to monitor for table changes"""
-        logger.info("👂 Table discovery monitoring started")
+        logger.info("Table discovery monitoring started")
         
         while self.monitoring_tables:
             try:
@@ -177,22 +210,22 @@ class DynamicTableMonitor:
                 
                 # Handle new tables
                 if new_tables:
-                    logger.info(f"🔄 Handling {len(new_tables)} new tables...")
+                    logger.info(f"Handling {len(new_tables)} new tables...")
                     self._handle_new_tables(new_tables)
                 
                 # Handle removed tables
                 if removed_tables:
-                    logger.info(f"🗑️ Handling {len(removed_tables)} removed tables...")
+                    logger.info(f"Handling {len(removed_tables)} removed tables...")
                     self._handle_removed_tables(removed_tables)
                 
                 # Check for schema changes in existing tables
                 self._check_schema_changes()
                 
             except Exception as e:
-                logger.error(f"❌ Error in table discovery loop: {str(e)}")
+                logger.error(f"Error in table discovery loop: {str(e)}")
                 time.sleep(10)  # Wait longer on error
         
-        logger.info("🛑 Table discovery monitoring stopped")
+        logger.info("Table discovery monitoring stopped")
     
     def _handle_new_tables(self, new_tables: Set[str]):
         """Handle newly discovered tables"""
@@ -207,10 +240,10 @@ class DynamicTableMonitor:
             # Update Kafka consumer to subscribe to new topics
             self._update_kafka_subscription()
             
-            logger.info(f"✅ Successfully added {len(new_tables)} new tables to monitoring")
+            logger.info(f"Successfully added {len(new_tables)} new tables to monitoring")
             
         except Exception as e:
-            logger.error(f"❌ Failed to handle new tables: {str(e)}")
+            logger.error(f"Failed to handle new tables: {str(e)}")
     
     def _handle_removed_tables(self, removed_tables: Set[str]):
         """Handle tables that were removed"""
@@ -227,10 +260,10 @@ class DynamicTableMonitor:
             # Update connector configuration
             self._update_connector_configuration()
             
-            logger.info(f"✅ Successfully removed {len(removed_tables)} tables from monitoring")
+            logger.info(f"Successfully removed {len(removed_tables)} tables from monitoring")
             
         except Exception as e:
-            logger.error(f"❌ Failed to handle removed tables: {str(e)}")
+            logger.error(f"Failed to handle removed tables: {str(e)}")
     
     def _check_schema_changes(self):
         """Check for schema changes in existing tables"""
@@ -251,36 +284,36 @@ class DynamicTableMonitor:
                     # Update stored schema
                     self.table_schemas[table] = current_schema
                     
-                    logger.info(f"📝 Schema change detected in {table}")
+                    logger.info(f"Schema change detected in {table}")
             
             if schema_changes:
                 self._handle_schema_changes(schema_changes)
             
         except Exception as e:
-            logger.error(f"❌ Schema change detection failed: {str(e)}")
+            logger.error(f"Schema change detection failed: {str(e)}")
     
     def _handle_schema_changes(self, schema_changes: List[Dict]):
         """Handle detected schema changes"""
         try:
             for change in schema_changes:
                 table = change['table']
-                logger.info(f"🔄 Handling schema change for {table}")
+                logger.info(f"Handling schema change for {table}")
                 
                 # Could trigger connector restart if needed
                 # For now, just log the change
                 logger.info(f"Schema updated for {table}: {len(change['new_columns'])} columns")
             
         except Exception as e:
-            logger.error(f"❌ Failed to handle schema changes: {str(e)}")
+            logger.error(f"Failed to handle schema changes: {str(e)}")
     
     def _setup_initial_connectors(self):
         """Setup initial CDC connectors with current tables"""
         try:
             if not self.current_tables:
-                logger.warning("⚠️ No tables to monitor, skipping connector setup")
+                logger.warning("No tables to monitor, skipping connector setup")
                 return False
             
-            logger.info("🔧 Setting up dynamic CDC connectors...")
+            logger.info("Setting up dynamic CDC connectors...")
             
             # Wait for Kafka Connect
             self._wait_for_kafka_connect()
@@ -294,25 +327,25 @@ class DynamicTableMonitor:
             if success:
                 time.sleep(10)  # Wait for connector to initialize
                 self._verify_connector_status()
-                logger.info("✅ Dynamic CDC connectors setup completed")
+                logger.info("Dynamic CDC connectors setup completed")
                 return True
             else:
-                logger.error("❌ Failed to setup dynamic connectors")
+                logger.error("Failed to setup dynamic connectors")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Connector setup failed: {str(e)}")
+            logger.error(f"Connector setup failed: {str(e)}")
             return False
     
     def _wait_for_kafka_connect(self, max_retries=30):
         """Wait for Kafka Connect to be ready"""
-        logger.info("⏳ Waiting for Kafka Connect...")
+        logger.info("Waiting for Kafka Connect...")
         
         for attempt in range(max_retries):
             try:
                 response = requests.get(f"{self.connect_url}/connectors", timeout=5)
                 if response.status_code == 200:
-                    logger.info("✅ Kafka Connect is ready")
+                    logger.info("Kafka Connect is ready")
                     return True
             except Exception:
                 pass
@@ -331,55 +364,88 @@ class DynamicTableMonitor:
                 connectors = response.json()
                 
                 for connector in connectors:
-                    logger.info(f"🗑️ Removing connector: {connector}")
+                    logger.info(f"Removing connector: {connector}")
                     delete_response = requests.delete(f"{self.connect_url}/connectors/{connector}", timeout=10)
                     if delete_response.status_code in [204, 404]:
-                        logger.info(f"✅ Removed: {connector}")
+                        logger.info(f"Removed: {connector}")
                     else:
-                        logger.warning(f"⚠️ Failed to remove {connector}: {delete_response.status_code}")
+                        logger.warning(f"Failed to remove {connector}: {delete_response.status_code}")
                         
         except Exception as e:
-            logger.warning(f"⚠️ Error cleaning connectors: {str(e)}")
+            logger.warning(f"Error cleaning connectors: {str(e)}")
     
     def _create_dynamic_connector(self):
-        """Create a single dynamic MySQL connector for all current tables"""
+        """Create the working connector using the user's proven configuration"""
         try:
-            table_include_list = [f"{self.database_name}.{table}" for table in self.current_tables]
+            # Use the exact configuration that works
+            mysql_host = os.getenv('MYSQL_HOST', 'mysql')
+            mysql_port = os.getenv('MYSQL_PORT', '3306')
+            mysql_user = os.getenv('MYSQL_USER', 'root')
+            mysql_password = os.getenv('MYSQL_PASSWORD', 'password')
+            database_name = os.getenv('MYSQL_DATABASE', 'inventory')
             
+            current_time = int(time.time())
+            server_id = str(current_time)[-7:]
+            
+            logger.info(f"Creating WORKING real-time CDC connector...")
+            logger.info(f"Server ID: {server_id}")
+            
+            # THIS IS THE WORKING CONFIGURATION!
             connector_config = {
-                "name": "dynamic-mysql-source",
+                "name": "adtrace-migration-working",
                 "config": {
                     "connector.class": "io.debezium.connector.mysql.MySqlConnector",
                     "tasks.max": "1",
-                    "database.hostname": "mysql",
-                    "database.port": "3306",
-                    "database.user": "debezium",
-                    "database.password": "dbz",
-                    "database.server.id": "184070",
-                    "database.server.name": "dynamic_mysql",
-                    "database.include.list": self.database_name,
-                    "table.include.list": ",".join(table_include_list),
-                    "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
-                    "schema.history.internal.kafka.topic": "schema-changes.dynamic",
+                    "database.hostname": mysql_host,
+                    "database.port": mysql_port,
+                    "database.user": mysql_user,
+                    "database.password": mysql_password,
+                    "database.server.id": server_id,
+                    "database.server.name": f"adtrace_{server_id}",
+                    "database.include.list": database_name,
+                    "table.include.list": self._build_dynamic_table_include_list(database_name),
+                    "schema.history.internal.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
+                    "schema.history.internal.kafka.topic": f"schema-history-working-{server_id}",
                     "include.schema.changes": "true",
-                    "topic.prefix": "dynamic",
-                    "snapshot.mode": "initial",
+                    
+                    # KEY CHANGE: Use schema_only snapshot + real-time monitoring  
+                    "snapshot.mode": "schema_only",  # Only capture schema, then monitor real changes
+                    "snapshot.locking.mode": "none",
+                    
+                    # Direct topic naming
+                    "topic.prefix": "adtrace_migration",
+                    
+                    # Use RegexRouter to route everything to single topic
                     "transforms": "route",
                     "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
-                    "transforms.route.regex": "([^.]+)\\.([^.]+)\\.([^.]+)",
-                    "transforms.route.replacement": "$3",
+                    "transforms.route.regex": "adtrace_migration\\.(.*)",
+                    "transforms.route.replacement": "adtrace_migration",
+                    
+                    # Converter settings
                     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
                     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-                    "key.converter.schemas.enable": "false",
+                    "key.converter.schemas.enable": "false", 
                     "value.converter.schemas.enable": "false",
+                    
+                    # Data type handling
                     "decimal.handling.mode": "string",
                     "time.precision.mode": "connect",
-                    "bigint.unsigned.handling.mode": "long"
+                    "bigint.unsigned.handling.mode": "long",
+                    "binary.handling.mode": "base64",
+                    "database.ssl.mode": "disabled",
+                    
+                    # IMPORTANT: Enable binlog monitoring
+                    "database.history.kafka.bootstrap.servers": os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'),
+                    "database.history.kafka.topic": f"schema-history-working-{server_id}",
+                    
+                    # Performance settings
+                    "max.batch.size": "1024",
+                    "max.queue.size": "4096",
+                    "poll.interval.ms": "1000"
                 }
             }
             
-            logger.info(f"📡 Creating dynamic connector for {len(self.current_tables)} tables")
-            logger.debug(f"Tables: {list(self.current_tables)}")
+            logger.info(f"Creating WORKING MySQL connector for {mysql_host}:{mysql_port}/{database_name}")
             
             response = requests.post(
                 f"{self.connect_url}/connectors",
@@ -389,14 +455,17 @@ class DynamicTableMonitor:
             )
             
             if response.status_code in [200, 201]:
-                logger.info("✅ Dynamic MySQL connector created successfully")
+                logger.info("WORKING CDC connector created successfully")
+                self.global_stats["connector_status"]["mysql"] = "running"
                 return True
             else:
-                logger.error(f"❌ Failed to create connector: {response.status_code} - {response.text}")
+                logger.error(f"Failed to create WORKING connector: {response.status_code} - {response.text}")
+                self.global_stats["connector_status"]["mysql"] = "failed"
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error creating dynamic connector: {str(e)}")
+            logger.error(f"Error creating WORKING connector: {str(e)}")
+            self.global_stats["connector_status"]["mysql"] = "error"
             return False
     
     def _update_connector_with_new_tables(self, new_tables: Set[str]):
@@ -404,7 +473,7 @@ class DynamicTableMonitor:
         try:
             # For now, recreate the connector with all tables
             # In production, you might want to use connector reconfiguration API
-            logger.info(f"🔄 Updating connector to include {len(new_tables)} new tables...")
+            logger.info(f"Updating connector to include {len(new_tables)} new tables...")
             
             self._cleanup_all_connectors()
             time.sleep(5)
@@ -413,7 +482,7 @@ class DynamicTableMonitor:
             self._verify_connector_status()
             
         except Exception as e:
-            logger.error(f"❌ Failed to update connector: {str(e)}")
+            logger.error(f"Failed to update connector: {str(e)}")
     
     def _update_connector_configuration(self):
         """Update connector configuration after table changes"""
@@ -425,17 +494,17 @@ class DynamicTableMonitor:
                 self._cleanup_all_connectors()
                 
         except Exception as e:
-            logger.error(f"❌ Failed to update connector configuration: {str(e)}")
+            logger.error(f"Failed to update connector configuration: {str(e)}")
     
     def _verify_connector_status(self):
         """Verify connector status"""
         try:
-            response = requests.get(f"{self.connect_url}/connectors/dynamic-mysql-source/status", timeout=10)
+            response = requests.get(f"{self.connect_url}/connectors/adtrace-migration-working/status", timeout=10)
             if response.status_code == 200:
                 status = response.json()
                 connector_state = status.get("connector", {}).get("state", "unknown")
                 
-                logger.info(f"📊 Connector Status: {connector_state}")
+                logger.info(f"Connector Status: {connector_state}")
                 
                 # Update global stats
                 self.global_stats["connector_status"]["mysql"] = connector_state
@@ -443,27 +512,28 @@ class DynamicTableMonitor:
                 tasks = status.get("tasks", [])
                 for i, task in enumerate(tasks):
                     task_state = task.get("state", "unknown")
-                    logger.info(f"📋 Task {i}: {task_state}")
+                    logger.info(f"Task {i}: {task_state}")
                     
                     if task_state == "FAILED":
-                        logger.error(f"❌ Task {i} failed: {task.get('trace', 'No trace')}")
+                        logger.error(f"Task {i} failed: {task.get('trace', 'No trace')}")
                 
                 return connector_state == "RUNNING"
             
         except Exception as e:
-            logger.error(f"❌ Error verifying connector: {str(e)}")
+            logger.error(f"Error verifying connector: {str(e)}")
             return False
     
     def _start_cdc_monitoring(self):
-        """Start CDC event monitoring with dynamic topic subscription"""
+        """Start CDC event monitoring with adtrace_migration topic"""
         try:
             if self.running:
-                logger.warning("⚠️ CDC monitoring already running")
+                logger.warning("CDC monitoring already running")
                 return
             
-            logger.info("🚀 Starting dynamic CDC event monitoring...")
+            logger.info("Starting AdTrace Migration CDC monitoring...")
             
             self.consumer = KafkaConsumer(
+                "adtrace_migration",  # Use the working single topic
                 bootstrap_servers=self.kafka_bootstrap_servers,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
                 key_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None,
@@ -475,18 +545,15 @@ class DynamicTableMonitor:
                 consumer_timeout_ms=1000
             )
             
-            # Subscribe to current table topics
-            self._update_kafka_subscription()
-            
             # Start consumer thread
             self.running = True
             self.consumer_thread = threading.Thread(target=self._consume_cdc_events, daemon=True)
             self.consumer_thread.start()
             
-            logger.info("✅ Dynamic CDC monitoring started")
+            logger.info("AdTrace Migration CDC monitoring started")
             
         except Exception as e:
-            logger.error(f"❌ Failed to start CDC monitoring: {str(e)}")
+            logger.error(f"Failed to start CDC monitoring: {str(e)}")
             self.running = False
     
     def _update_kafka_subscription(self):
@@ -494,15 +561,15 @@ class DynamicTableMonitor:
         try:
             if self.consumer and self.current_tables:
                 topics = list(self.current_tables)
-                logger.info(f"🔗 Updating Kafka subscription to {len(topics)} topics: {topics}")
+                logger.info(f"Updating Kafka subscription to {len(topics)} topics: {topics}")
                 self.consumer.subscribe(topics)
             
         except Exception as e:
-            logger.error(f"❌ Failed to update Kafka subscription: {str(e)}")
+            logger.error(f"Failed to update Kafka subscription: {str(e)}")
     
     def _consume_cdc_events(self):
         """Consume CDC events from dynamically subscribed topics"""
-        logger.info("👂 Dynamic CDC event consumer started")
+        logger.info("Dynamic CDC event consumer started")
         
         message_count = 0
         last_log_time = time.time()
@@ -522,14 +589,14 @@ class DynamicTableMonitor:
                 # Heartbeat log
                 current_time = time.time()
                 if current_time - last_log_time > 60:
-                    logger.info(f"💓 CDC Monitor: {message_count} events processed, monitoring {len(self.current_tables)} tables")
+                    logger.info(f"CDC Monitor: {message_count} events processed, monitoring {len(self.current_tables)} tables")
                     last_log_time = current_time
                     
             except Exception as e:
-                logger.error(f"❌ Error consuming CDC events: {str(e)}")
+                logger.error(f"Error consuming CDC events: {str(e)}")
                 time.sleep(5)
         
-        logger.info("🛑 Dynamic CDC event consumer stopped")
+        logger.info("Dynamic CDC event consumer stopped")
     
     def _process_cdc_event(self, message, table_name):
         """Process a CDC event from any monitored table"""
@@ -538,28 +605,43 @@ class DynamicTableMonitor:
                 return
             
             cdc_event = message.value
+            
+            # Extract table name from CDC event instead of using topic name
+            actual_table_name = self._extract_table_name_from_event(cdc_event)
+            if not actual_table_name:
+                # If we couldn't extract table name, use topic name
+                actual_table_name = table_name
+            
             operation = self._extract_operation(cdc_event)
             
             if operation:
-                # Update global stats
+                # Update global stats - previous code
                 self.global_stats["cdc_events_processed"] += 1
                 self.global_stats["sync_stats"][operation] = self.global_stats["sync_stats"].get(operation, 0) + 1
                 self.global_stats["last_cdc_event"] = {
-                    "table": table_name,
+                    "table": actual_table_name,
                     "operation": operation,
                     "timestamp": datetime.now().isoformat()
                 }
                 
-                # Store event
-                self._store_cdc_event(cdc_event, table_name, operation)
+                self._store_cdc_event(cdc_event, actual_table_name, operation)
                 
-                # Update table sync status
-                self._update_table_sync_status(table_name, operation)
+                self._update_table_sync_status(actual_table_name, operation)
                 
-                logger.info(f"📝 CDC Event: {operation} on {table_name} (Total: {self.global_stats['cdc_events_processed']})")
+                if self.cdc_replicator:
+                    try:
+                        replication_success = self.cdc_replicator.process_cdc_event(cdc_event, actual_table_name, operation)
+                        if replication_success:
+                            logger.info(f"CDC Replication successful: {operation} on {actual_table_name}")
+                        else:
+                            logger.warning(f"CDC Replication failed: {operation} on {actual_table_name}")
+                    except Exception as e:
+                        logger.error(f"CDC Replication error: {str(e)}")
+                
+                logger.info(f"CDC Event: {operation} on {actual_table_name} (Total: {self.global_stats['cdc_events_processed']})")
                 
         except Exception as e:
-            logger.error(f"❌ Failed to process CDC event: {str(e)}")
+            logger.error(f"Failed to process CDC event: {str(e)}")
     
     def _extract_operation(self, cdc_event):
         """Extract operation type from CDC event"""
@@ -569,7 +651,22 @@ class DynamicTableMonitor:
                 return op_map.get(cdc_event['op'], 'unknown')
             return None
         except Exception as e:
-            logger.error(f"❌ Failed to extract operation: {str(e)}")
+            logger.error(f"Failed to extract operation: {str(e)}")
+            return None
+    
+    def _extract_table_name_from_event(self, cdc_event):
+        """Extract table name from CDC event"""
+        try:
+            # Try different ways to extract table name from CDC event
+            if 'source' in cdc_event and 'table' in cdc_event['source']:
+                return cdc_event['source']['table']
+            
+            if 'payload' in cdc_event and 'source' in cdc_event['payload'] and 'table' in cdc_event['payload']['source']:
+                return cdc_event['payload']['source']['table']
+            
+            return None
+        except Exception as e:
+            logger.error(f"Error extracting table name: {str(e)}")
             return None
     
     def _store_cdc_event(self, cdc_event, table_name, operation):
@@ -593,7 +690,7 @@ class DynamicTableMonitor:
                 self.redis.set(f"last_sync:{table_name}", datetime.now().isoformat())
                 
         except Exception as e:
-            logger.error(f"❌ Failed to store CDC event: {str(e)}")
+            logger.error(f"Failed to store CDC event: {str(e)}")
     
     def _update_table_sync_status(self, table_name, operation):
         """Update sync status for a table"""
@@ -612,7 +709,7 @@ class DynamicTableMonitor:
             }
             
         except Exception as e:
-            logger.error(f"❌ Failed to update sync status: {str(e)}")
+            logger.error(f"Failed to update sync status: {str(e)}")
     
     def _get_table_count(self, db_type, table_name):
         """Get table count from database"""
@@ -638,10 +735,10 @@ class DynamicTableMonitor:
                 "sync_percentage": (postgres_count / mysql_count * 100) if mysql_count > 0 else 0
             }
             
-            logger.info(f"📊 Initialized sync status for new table: {table_name}")
+            logger.info(f"Initialized sync status for new table: {table_name}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize sync status for {table_name}: {str(e)}")
+            logger.error(f"Failed to initialize sync status for {table_name}: {str(e)}")
     
     def get_monitoring_status(self):
         """Get comprehensive monitoring status"""
@@ -660,7 +757,7 @@ class DynamicTableMonitor:
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
-            logger.error(f"❌ Failed to get monitoring status: {str(e)}")
+            logger.error(f"Failed to get monitoring status: {str(e)}")
             return {}
     
     def add_table_manually(self, table_name: str):
@@ -671,22 +768,22 @@ class DynamicTableMonitor:
                     self.current_tables.add(table_name)
                     self.table_schemas[table_name] = self._get_table_columns(table_name)
                     self._handle_new_tables({table_name})
-                    logger.info(f"✅ Manually added table to monitoring: {table_name}")
+                    logger.info(f"Manually added table to monitoring: {table_name}")
                     return True
                 else:
-                    logger.warning(f"⚠️ Table already being monitored: {table_name}")
+                    logger.warning(f"Table already being monitored: {table_name}")
                     return False
             else:
-                logger.warning(f"⚠️ Table excluded from monitoring: {table_name}")
+                logger.warning(f"Table excluded from monitoring: {table_name}")
                 return False
         except Exception as e:
-            logger.error(f"❌ Failed to manually add table {table_name}: {str(e)}")
+            logger.error(f"Failed to manually add table {table_name}: {str(e)}")
             return False
     
     def stop_monitoring(self):
         """Stop all monitoring activities"""
         try:
-            logger.info("🛑 Stopping Dynamic Table Monitor...")
+            logger.info("Stopping Dynamic Table Monitor...")
             
             # Stop table discovery
             self.monitoring_tables = False
@@ -705,7 +802,7 @@ class DynamicTableMonitor:
             if self.monitor_thread and self.monitor_thread.is_alive():
                 self.monitor_thread.join(timeout=10)
             
-            logger.info("✅ Dynamic Table Monitor stopped")
+            logger.info("Dynamic Table Monitor stopped")
             
         except Exception as e:
-            logger.error(f"❌ Error stopping monitor: {str(e)}") 
+            logger.error(f"Error stopping monitor: {str(e)}") 

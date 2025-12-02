@@ -26,7 +26,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const config = {
   redis: {
     host: process.env.REDIS_HOST || 'redis',
-    port: 6379
+    port: parseInt(process.env.REDIS_PORT) || 6379
   },
   mysql: {
     host: process.env.MYSQL_HOST || 'mysql',
@@ -43,43 +43,77 @@ const config = {
     port: parseInt(process.env.POSTGRES_PORT) || 5432
   },
   validator: {
-    url: 'http://data-validator:8000'
+    url: process.env.VALIDATOR_URL || 'http://data-validator:8000'
   }
 };
 
 // Initialize connections
-let redisClient;
-let mysqlConnection;
-let postgresClient;
+let redisClient = null;
+let mysqlConnection = null;
+let postgresClient = null;
+
+// Redis Connection (optional - will work without it)
+async function connectRedis() {
+  // Skip Redis if disabled in environment
+  if (config.redis.host === 'disabled' || !config.redis.host || config.redis.host === 'redis') {
+    console.log('Redis disabled or not properly configured, skipping Redis connection');
+    redisClient = null;
+    return;
+  }
+  
+  try {
+    redisClient = redis.createClient({
+      url: `redis://${config.redis.host}:${config.redis.port}`,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries > 3) {
+            console.log('Redis connection failed after 3 retries, running without Redis');
+            return false; // Don't retry
+          }
+          return Math.min(retries * 100, 1000);
+        }
+      }
+    });
+
+    redisClient.on('error', (err) => {
+      console.log('Redis Client Error:', err.message);
+      redisClient = null; // Disable Redis functionality
+    });
+
+    redisClient.on('connect', () => {
+      console.log('Connected to Redis successfully');
+    });
+
+    await redisClient.connect();
+  } catch (error) {
+    console.log('Redis connection failed, continuing without Redis:', error.message);
+    redisClient = null;
+  }
+}
 
 async function initializeConnections() {
   try {
-    // Redis connection
-    redisClient = redis.createClient({
-      socket: {
-        host: config.redis.host,
-        port: config.redis.port
-      }
-    });
+    // Try Redis connection (optional) - only if enabled
+    const redis_host = process.env.REDIS_HOST;
+    if (redis_host !== 'disabled' && redis_host !== 'redis' && redis_host) {
+      await connectRedis();
+    } else {
+      console.log('Redis is disabled in configuration, skipping Redis connection');
+      redisClient = null;
+    }
     
-    redisClient.on('error', (err) => {
-      console.error('Redis Client Error:', err);
-    });
-    
-    await redisClient.connect();
-    console.log('✅ Connected to Redis');
-
     // MySQL connection
     mysqlConnection = await mysql.createConnection(config.mysql);
-    console.log('✅ Connected to MySQL');
+    console.log('Connected to MySQL');
 
     // PostgreSQL connection
     postgresClient = new Client(config.postgres);
     await postgresClient.connect();
-    console.log('✅ Connected to PostgreSQL');
+    console.log('Connected to PostgreSQL');
 
   } catch (error) {
-    console.error('❌ Failed to initialize connections:', error);
+    console.error('Failed to initialize some connections:', error);
+    console.log('Continuing with available connections...');
   }
 }
 
@@ -108,7 +142,7 @@ app.get('/api/status', async (req, res) => {
 app.get('/api/metrics', async (req, res) => {
   try {
     // Get metrics from data validator service with dynamic table lists
-    const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 5000 });
+    const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 15000 });
     res.json(response.data);
   } catch (error) {
     console.error('Error getting metrics from validator:', error.message);
@@ -140,6 +174,54 @@ app.get('/api/kafka-status', async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error('Error getting Kafka status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/sync-check', async (req, res) => {
+  try {
+    const response = await axios.post(`${config.validator.url}/sync-check`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error performing sync check:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/health', async (req, res) => {
+  try {
+    const response = await axios.get(`${config.validator.url}/health`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error getting health status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/debezium/status', async (req, res) => {
+  try {
+    const response = await axios.get(`${config.validator.url}/debezium/status`);
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error getting debezium status:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/connector-status/:connectorName', async (req, res) => {
+  try {
+    const { connectorName } = req.params;
+    // Since data-validator doesn't have this endpoint, we'll get it from debezium/status
+    const response = await axios.get(`${config.validator.url}/debezium/status`);
+    const connectors = response.data.active_connectors || {};
+    
+    if (connectors[connectorName]) {
+      res.json(connectors[connectorName]);
+    } else {
+      res.status(404).json({ error: `Connector ${connectorName} not found` });
+    }
+  } catch (error) {
+    console.error('Error getting connector status:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -188,6 +270,9 @@ app.get('/api/latest-records/:tableName', async (req, res) => {
 
 // Helper functions
 async function testRedisConnection() {
+  if (!redisClient) {
+    return { status: 'disconnected', message: 'Redis is not initialized' };
+  }
   try {
     await redisClient.ping();
     return { status: 'connected', message: 'Redis is healthy' };
@@ -216,7 +301,7 @@ async function testPostgresConnection() {
 
 async function testValidatorConnection() {
   try {
-    const response = await axios.get(`${config.validator.url}/health`, { timeout: 5000 });
+    const response = await axios.get(`${config.validator.url}/health`, { timeout: 15000 });
     return { status: 'connected', message: 'Data validator is healthy', data: response.data };
   } catch (error) {
     return { status: 'disconnected', message: error.message };
@@ -256,8 +341,8 @@ async function getFallbackMetrics() {
   const mysqlTables = await getMySQLTables();
   const postgresTables = await getPostgresTables();
   
-  // Use tables from MySQL as the source of truth
-  const tables = mysqlTables.length > 0 ? mysqlTables : ['users', 'products', 'orders', 'order_items'];
+  // Use tables from MySQL as the source of truth - no hardcoded fallback
+  const tables = mysqlTables.length > 0 ? mysqlTables : [];
   
   const metrics = {
     timestamp: new Date().toISOString(),
@@ -272,12 +357,12 @@ async function getFallbackMetrics() {
   };
 
   try {
-    // Get MySQL table counts
-    if (mysqlConnection) {
+    // Get MySQL table counts for all discovered tables
+    if (mysqlConnection && tables.length > 0) {
       metrics.database_stats.mysql.status = 'connected';
       for (const table of tables) {
         try {
-          const [rows] = await mysqlConnection.execute(`SELECT COUNT(*) as count FROM ${table}`);
+          const [rows] = await mysqlConnection.execute(`SELECT COUNT(*) as count FROM \`${table}\``);
           metrics.database_stats.mysql.tables[table] = rows[0].count;
         } catch (error) {
           console.error(`Error counting MySQL table ${table}:`, error);
@@ -286,12 +371,12 @@ async function getFallbackMetrics() {
       }
     }
 
-    // Get PostgreSQL table counts
-    if (postgresClient) {
+    // Get PostgreSQL table counts for all discovered tables
+    if (postgresClient && tables.length > 0) {
       metrics.database_stats.postgres.status = 'connected';
       for (const table of tables) {
         try {
-          const result = await postgresClient.query(`SELECT COUNT(*) as count FROM ${table}`);
+          const result = await postgresClient.query(`SELECT COUNT(*) as count FROM "${table}"`);
           metrics.database_stats.postgres.tables[table] = parseInt(result.rows[0].count);
         } catch (error) {
           console.error(`Error counting PostgreSQL table ${table}:`, error);
@@ -317,7 +402,7 @@ io.on('connection', (socket) => {
   // Send periodic updates
   const updateInterval = setInterval(() => {
     sendRealTimeUpdate(socket);
-  }, 30000); // Update every 30 seconds instead of 5
+  }, 300000); // Update every 30 seconds instead of 5
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
@@ -334,7 +419,7 @@ async function sendRealTimeUpdate(socket) {
     // Get current metrics from data validator API first
     let metrics;
     try {
-      const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 5000 });
+      const response = await axios.get(`${config.validator.url}/metrics`, { timeout: 15000 });
       metrics = response.data;
       console.log("Got metrics from validator API, MySQL tables:", metrics?.database_stats?.mysql?.table_list?.length || 0);
     } catch (error) {
@@ -351,7 +436,7 @@ async function sendRealTimeUpdate(socket) {
     // Get validation status
     let validationStatus = null;
     try {
-      const response = await axios.get(`${config.validator.url}/stats`, { timeout: 3000 });
+      const response = await axios.get(`${config.validator.url}/stats`, { timeout: 10000 });
       validationStatus = response.data;
     } catch (error) {
       console.error("Failed to get validation status:", error.message);
@@ -360,7 +445,7 @@ async function sendRealTimeUpdate(socket) {
     // Get Kafka status
     let kafkaStatus = null;
     try {
-      const response = await axios.get(`${config.validator.url}/kafka-status`, { timeout: 3000 });
+      const response = await axios.get(`${config.validator.url}/kafka-status`, { timeout: 10000 });
       kafkaStatus = response.data;
     } catch (error) {
       console.error("Failed to get Kafka status:", error.message);
@@ -381,20 +466,20 @@ async function sendRealTimeUpdate(socket) {
 }
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.MONITORING_PORT || process.env.PORT || 3000;
 
 async function startServer() {
   await initializeConnections();
   
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Monitoring Dashboard running on port ${PORT}`);
-    console.log(`📊 Dashboard URL: http://localhost:${PORT}`);
+    console.log(`Monitoring Dashboard running on port ${PORT}`);
+    console.log(`Dashboard URL: http://localhost:${PORT}`);
   });
 }
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('🛑 Shutting down gracefully...');
+  console.log('Shutting down gracefully...');
   
   if (redisClient) {
     await redisClient.quit();
@@ -407,7 +492,7 @@ process.on('SIGINT', async () => {
   }
   
   server.close(() => {
-    console.log('✅ Server closed');
+    console.log('Server closed');
     process.exit(0);
   });
 });

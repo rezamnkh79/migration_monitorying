@@ -24,7 +24,8 @@ COPY . .
 RUN mkdir -p logs
 
 # Expose port
-EXPOSE 8000
+# for change this should change main.py and docker-compose :9000
+EXPOSE 9000
 
 # Run the application
 CMD ["python", "main.py"] 
